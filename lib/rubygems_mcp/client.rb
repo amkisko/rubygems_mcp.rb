@@ -349,18 +349,18 @@ module RubygemsMcp
       end
     end
 
-    # Get changelog summary for a Ruby version from release notes
+    # Get full changelog content for a Ruby version from release notes
     #
     # @param version [String] Ruby version (e.g., "3.4.7")
-    # @return [Hash] Hash with :version, :release_notes_url, and :summary
+    # @return [Hash] Hash with :version, :release_notes_url, and :content (full content)
     def get_ruby_version_changelog(version)
       # First get the release notes URL for this version
       versions = get_ruby_versions
       version_data = versions.find { |v| v[:version] == version }
-      return {version: version, release_notes_url: nil, summary: nil, error: "Version not found"} unless version_data
+      return {version: version, release_notes_url: nil, content: nil, error: "Version not found"} unless version_data
 
       release_notes_url = version_data[:release_notes_url]
-      return {version: version, release_notes_url: nil, summary: nil, error: "No release notes available"} unless release_notes_url
+      return {version: version, release_notes_url: nil, content: nil, error: "No release notes available"} unless release_notes_url
 
       cache_key = "ruby_changelog:#{version}"
 
@@ -371,29 +371,32 @@ module RubygemsMcp
 
       uri = URI(release_notes_url)
       response = make_request(uri, parse_html: true)
-      return {version: version, release_notes_url: release_notes_url, summary: nil, error: "Failed to fetch release notes"} unless response
+      return {version: version, release_notes_url: release_notes_url, content: nil, error: "Failed to fetch release notes"} unless response
 
-      # Extract the main content - typically in a div with class "content" or "entry-content"
-      # Try multiple selectors to find the main content
-      content = response.css("div.content, div.entry-content, article, main").first || response.css("body").first
+      # Extract the main content - Ruby release notes use div#content
+      content = response.css("div#content").first || response.css("div.content, div.entry-content, article, main").first
 
       if content
-        # Extract text, remove excessive whitespace, and get first few paragraphs
-        text = content.text.strip
-        # Split into paragraphs and take first 3-5 meaningful ones
-        paragraphs = text.split(/\n\n+/).reject { |p| p.strip.length < 50 }
-        summary = paragraphs.first(5).join("\n\n").strip
+        # Remove navigation and metadata elements
+        content.css("p.post-info, .post-info, nav, .navigation, header, footer, .sidebar").remove
 
-        # Limit summary length
-        summary = summary[0..2000] + "..." if summary.length > 2000
+        # Get the full text content, preserving structure
+        text = content.text.strip
+
+        # Clean up excessive whitespace but preserve paragraph structure
+        text = text.gsub(/\n{3,}/, "\n\n")
+        text = text.gsub(/[ \t]+/, " ")
+
+        # Remove empty lines at start/end
+        text = text.strip
       else
-        summary = nil
+        text = nil
       end
 
       result = {
         version: version,
         release_notes_url: release_notes_url,
-        summary: summary
+        content: text
       }
 
       # Cache for 24 hours
@@ -562,9 +565,10 @@ module RubygemsMcp
 
       # Extract the main content - try GitHub release page first, then generic selectors
       content = if changelog_uri.include?("github.com") && changelog_uri.include?("/releases/")
-        # GitHub release page - look for release notes in markdown-body or release notes section
-        response.css(".markdown-body, .release-body, [data-testid='release-body']").first ||
-          response.css("div.repository-content, article").first
+        # GitHub release page - look for release notes in markdown-body
+        response.css(".markdown-body").first ||
+          response.css("[data-testid='release-body'], .release-body").first ||
+          response.css("div.repository-content article").first
       else
         # Generic changelog page
         response.css("div.content, div.entry-content, article, main, .markdown-body").first
@@ -573,29 +577,90 @@ module RubygemsMcp
       content ||= response.css("body").first
 
       summary = if content
+        # Remove UI elements, navigation, and error messages
+        content.css("nav, header, footer, .navigation, .sidebar, .blankslate, details, summary, .Box-footer, .Counter, [data-view-component], script, style").remove
+
+        # Remove elements with common UI classes
+        content.css("[class*='blankslate'], [class*='Box-footer'], [class*='Counter'], [class*='details-toggle']").remove
+
+        # Get text content
         text = content.text.strip
-        # Remove common navigation/header text patterns
+
+        # Remove common GitHub UI text patterns
         text = text.gsub(/Notifications.*?signed in.*?reload/im, "")
         text = text.gsub(/You must be signed in.*?reload/im, "")
         text = text.gsub(/There was an error.*?reload/im, "")
+        text = text.gsub(/Please reload this page.*?/im, "")
+        text = text.gsub(/Loading.*?/im, "")
+        text = text.gsub(/Uh oh!.*?/im, "")
+        text = text.gsub(/Assets.*?\d+.*?/im, "")
 
-        # Split into paragraphs and take first 5-10 meaningful ones
-        # Try splitting by double newlines first, then by single newlines if that doesn't work
-        paragraphs = if text.include?("\n\n")
-          text.split(/\n\n+/)
-        else
-          text.split(/\n+/)
+        # Remove commit hashes and issue references that are just links without context
+        text = text.gsub(/\b[a-f0-9]{7,40}\b/, "") # Remove commit hashes
+        text = text.gsub(/#\d+\s*$/, "") # Remove trailing issue numbers without context
+
+        # Clean up whitespace
+        text = text.gsub(/\n{3,}/, "\n\n")
+        text = text.gsub(/[ \t]{2,}/, " ")
+
+        # Split into lines and filter out irrelevant content
+        lines = text.split(/\n+/)
+
+        # Filter out lines that are likely UI elements or irrelevant
+        filtered_lines = []
+        prev_line_was_meaningful = false
+
+        lines.each_with_index do |line, idx|
+          stripped = line.strip
+          next if stripped.empty?
+
+          # Skip UI elements
+          next if stripped.match?(/^(Notifications|You must|There was|Please reload|Loading|Uh oh|Assets|\d+\s*$)/i)
+          next if stripped.match?(/^\/\s*$/)
+          next if stripped.match?(/^[a-f0-9]{7,40}$/) # Standalone commit hashes
+          next if stripped.match?(/^\s*#\d+\s*$/) # Standalone issue numbers
+
+          # Skip author names that appear alone (pattern: First Last or First Middle Last)
+          # Author names typically appear after a change description ends with punctuation
+          if stripped.match?(/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/) && stripped.length < 50 && !stripped.match?(/^[A-Z][a-z]+ [A-Z]\./) # Not initials like "J. Smith"
+            # Check if previous line ends with punctuation (end of sentence = author attribution follows)
+            if idx > 0 && filtered_lines.any?
+              prev = filtered_lines.last.to_s.strip
+              # If previous line ends with punctuation, this standalone name is likely an author
+              if prev.match?(/[.!]$/)
+                next
+              end
+            elsif idx == 0
+              # First line that's just a name, skip it
+              next
+            end
+          end
+
+          # Keep meaningful lines
+          if stripped.length >= 10
+            filtered_lines << line
+            prev_line_was_meaningful = true
+          end
         end
 
-        paragraphs = paragraphs.reject { |p|
-          p.strip.length < 30 ||
-            p.match?(/^(rails|Notifications|You must|There was)/i) ||
-            p.match?(/^\/\s*$/)
-        }
-        summary_text = paragraphs.first(10).join("\n\n").strip
+        # Remove trailing "No changes." and similar repetitive endings
+        while filtered_lines.last&.strip&.match?(/^(No changes\.?|Guides)$/i)
+          filtered_lines.pop
+        end
 
-        # Limit summary length
-        summary_text = summary_text[0..3000] + "..." if summary_text.length > 3000
+        # Join back and clean up
+        summary_text = filtered_lines.join("\n").strip
+
+        # Remove excessive blank lines
+        summary_text = summary_text.gsub(/\n{3,}/, "\n\n")
+
+        # Limit length but keep it reasonable for changelogs
+        if summary_text.length > 10000
+          # Try to cut at a reasonable point (end of a section)
+          cut_point = summary_text[0..10000].rindex(/\n\n/)
+          summary_text = summary_text[0..(cut_point || 10000)].strip + "\n\n..."
+        end
+
         summary_text.empty? ? nil : summary_text
       end
 

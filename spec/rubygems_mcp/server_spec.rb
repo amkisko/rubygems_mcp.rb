@@ -16,21 +16,21 @@ RSpec.describe RubygemsMcp::Server do
       described_class.register_tools(server)
 
       expect(server.tools.length).to eq(12)
-      # Tools are stored as string keys
+      # Tools are stored with user-friendly snake_case names
       tool_names = server.tools.keys.map(&:to_s)
       expect(tool_names).to include(
-        "RubygemsMcp::Server::GetLatestVersionsTool",
-        "RubygemsMcp::Server::GetGemVersionsTool",
-        "RubygemsMcp::Server::GetLatestRubyVersionTool",
-        "RubygemsMcp::Server::GetRubyVersionsTool",
-        "RubygemsMcp::Server::GetRubyVersionChangelogTool",
-        "RubygemsMcp::Server::GetGemInfoTool",
-        "RubygemsMcp::Server::GetGemReverseDependenciesTool",
-        "RubygemsMcp::Server::GetGemVersionDownloadsTool",
-        "RubygemsMcp::Server::GetLatestGemsTool",
-        "RubygemsMcp::Server::GetRecentlyUpdatedGemsTool",
-        "RubygemsMcp::Server::GetGemChangelogTool",
-        "RubygemsMcp::Server::SearchGemsTool"
+        "get_latest_versions",
+        "get_gem_versions",
+        "get_latest_ruby_version",
+        "get_ruby_versions",
+        "get_ruby_version_changelog",
+        "get_gem_info",
+        "get_gem_reverse_dependencies",
+        "get_gem_version_downloads",
+        "get_latest_gems",
+        "get_recently_updated_gems",
+        "get_gem_changelog",
+        "search_gems"
       )
     end
   end
@@ -41,7 +41,9 @@ RSpec.describe RubygemsMcp::Server do
       described_class.register_resources(server)
 
       expect(server.resources.length).to eq(4)
-      expect(server.resources.keys).to include(
+      # Resources are stored as an Array of classes
+      resource_uris = server.resources.map(&:uri)
+      expect(resource_uris).to include(
         "rubygems://popular",
         "rubygems://ruby/compatibility",
         "rubygems://ruby/maintenance",
@@ -54,7 +56,7 @@ RSpec.describe RubygemsMcp::Server do
     describe "PopularGemsResource" do
       it "provides popular gems data", :vcr do
         VCR.use_cassette("popular_gems_resource") do
-          resource = RubygemsMcp::Server::PopularGemsResource.instance
+          resource = RubygemsMcp::Server::PopularGemsResource.new
           expect(resource.uri).to eq("rubygems://popular")
           expect(resource.class.resource_name).to eq("Popular Ruby Gems")
           expect(resource.content).to be_a(String)
@@ -65,7 +67,7 @@ RSpec.describe RubygemsMcp::Server do
     describe "RubyVersionCompatibilityResource" do
       it "provides compatibility data", :vcr do
         VCR.use_cassette("ruby_version_compatibility_resource") do
-          resource = RubygemsMcp::Server::RubyVersionCompatibilityResource.instance
+          resource = RubygemsMcp::Server::RubyVersionCompatibilityResource.new
           expect(resource.uri).to eq("rubygems://ruby/compatibility")
           expect(resource.class.resource_name).to eq("Ruby Version Compatibility")
           expect(resource.content).to be_a(String)
@@ -76,7 +78,7 @@ RSpec.describe RubygemsMcp::Server do
     describe "RubyMaintenanceStatusResource" do
       it "provides maintenance status data", :vcr do
         VCR.use_cassette("ruby_maintenance_status_resource") do
-          resource = RubygemsMcp::Server::RubyMaintenanceStatusResource.instance
+          resource = RubygemsMcp::Server::RubyMaintenanceStatusResource.new
           expect(resource.uri).to eq("rubygems://ruby/maintenance")
           expect(resource.class.resource_name).to eq("Ruby Maintenance Status")
           expect(resource.content).to be_a(String)
@@ -87,7 +89,7 @@ RSpec.describe RubygemsMcp::Server do
     describe "LatestRubyVersionResource" do
       it "provides latest Ruby version data", :vcr do
         VCR.use_cassette("latest_ruby_version_resource") do
-          resource = RubygemsMcp::Server::LatestRubyVersionResource.instance
+          resource = RubygemsMcp::Server::LatestRubyVersionResource.new
           expect(resource.uri).to eq("rubygems://ruby/latest")
           expect(resource.class.resource_name).to eq("Latest Ruby Version")
           expect(resource.content).to be_a(String)

@@ -16,6 +16,21 @@ FastMcp = MCP unless defined?(FastMcp)
 module MCP
   module Transports
     class StdioTransport
+      if method_defined?(:send_error)
+        alias_method :original_send_error, :send_error
+
+        def send_error(code, message, id = nil)
+          # Use placeholder id if nil to satisfy strict MCP client validation
+          # JSON-RPC 2.0 allows null for notifications, but MCP clients require valid id
+          id = "error_#{SecureRandom.hex(8)}" if id.nil?
+          original_send_error(code, message, id)
+        end
+      end
+    end
+  end
+
+  class Server
+    if method_defined?(:send_error)
       alias_method :original_send_error, :send_error
 
       def send_error(code, message, id = nil)
@@ -24,17 +39,6 @@ module MCP
         id = "error_#{SecureRandom.hex(8)}" if id.nil?
         original_send_error(code, message, id)
       end
-    end
-  end
-
-  class Server
-    alias_method :original_send_error, :send_error
-
-    def send_error(code, message, id = nil)
-      # Use placeholder id if nil to satisfy strict MCP client validation
-      # JSON-RPC 2.0 allows null for notifications, but MCP clients require valid id
-      id = "error_#{SecureRandom.hex(8)}" if id.nil?
-      original_send_error(code, message, id)
     end
   end
 end
@@ -151,11 +155,12 @@ module RubygemsMcp
 
     # Get latest versions for a list of gems with release dates
     class GetLatestVersionsTool < BaseTool
+      tool_name "get_latest_versions"
       description "Get latest versions for a list of gems with release dates and licenses. Supports GraphQL-like field selection."
 
       arguments do
-        required(:gem_names).filled(:array, min_size?: 1).description("Array of gem names (e.g., ['rails', 'nokogiri', 'rack'])")
-        optional(:fields).filled(:array).description("GraphQL-like field selection. Available: name, version, release_date, license, built_at, prerelease, platform, ruby_version, rubygems_version, downloads_count, sha, spec_sha, requirements, metadata")
+        required(:gem_names).array(:string, min_size?: 1).description("Array of gem names (e.g., ['rails', 'nokogiri', 'rack'])")
+        optional(:fields).array(:string).description("GraphQL-like field selection. Available: name, version, release_date, license, built_at, prerelease, platform, ruby_version, rubygems_version, downloads_count, sha, spec_sha, requirements, metadata")
       end
 
       def call(gem_names:, fields: nil)
@@ -165,6 +170,7 @@ module RubygemsMcp
 
     # Get all versions for a single gem
     class GetGemVersionsTool < BaseTool
+      tool_name "get_gem_versions"
       description "Get all versions for a single gem with release dates and licenses, sorted by version descending. Supports GraphQL-like field selection."
 
       arguments do
@@ -172,7 +178,7 @@ module RubygemsMcp
         optional(:limit).filled(:integer).description("Maximum number of versions to return (for pagination)")
         optional(:offset).filled(:integer).description("Number of versions to skip (for pagination)")
         optional(:sort).filled(:string).description("Sort order: version_desc, version_asc, date_desc, or date_asc (default: version_desc)")
-        optional(:fields).filled(:array).description("GraphQL-like field selection. Available: version, release_date, license, built_at, prerelease, platform, ruby_version, rubygems_version, downloads_count, sha, spec_sha, requirements, metadata")
+        optional(:fields).array(:string).description("GraphQL-like field selection. Available: version, release_date, license, built_at, prerelease, platform, ruby_version, rubygems_version, downloads_count, sha, spec_sha, requirements, metadata")
       end
 
       def call(gem_name:, limit: nil, offset: 0, sort: "version_desc", fields: nil)
@@ -189,6 +195,7 @@ module RubygemsMcp
 
     # Get latest Ruby version with release date
     class GetLatestRubyVersionTool < BaseTool
+      tool_name "get_latest_ruby_version"
       description "Get latest Ruby version with release date"
 
       arguments do
@@ -202,6 +209,7 @@ module RubygemsMcp
 
     # Get all Ruby versions with release dates
     class GetRubyVersionsTool < BaseTool
+      tool_name "get_ruby_versions"
       description "Get all Ruby versions with release dates, download URLs, and release notes URLs, sorted by version descending"
 
       arguments do
@@ -224,6 +232,7 @@ module RubygemsMcp
 
     # Get changelog summary for a Ruby version
     class GetRubyVersionChangelogTool < BaseTool
+      tool_name "get_ruby_version_changelog"
       description "Get changelog summary for a specific Ruby version by fetching and parsing the release notes"
 
       arguments do
@@ -237,11 +246,12 @@ module RubygemsMcp
 
     # Get gem information (summary, homepage, etc.)
     class GetGemInfoTool < BaseTool
+      tool_name "get_gem_info"
       description "Get detailed information about a gem (summary, homepage, source code, documentation, licenses, authors, dependencies, downloads). Supports GraphQL-like field selection."
 
       arguments do
         required(:gem_name).filled(:string).description("Gem name (e.g., 'rails')")
-        optional(:fields).filled(:array).description("GraphQL-like field selection. Available: name, version, summary, description, homepage, source_code, documentation, licenses, authors, info, downloads, version_downloads, yanked, dependencies, changelog_uri, funding_uri, platform, sha, spec_sha, metadata")
+        optional(:fields).array(:string).description("GraphQL-like field selection. Available: name, version, summary, description, homepage, source_code, documentation, licenses, authors, info, downloads, version_downloads, yanked, dependencies, changelog_uri, funding_uri, platform, sha, spec_sha, metadata")
       end
 
       def call(gem_name:, fields: nil)
@@ -251,6 +261,7 @@ module RubygemsMcp
 
     # Get reverse dependencies (gems that depend on this gem)
     class GetGemReverseDependenciesTool < BaseTool
+      tool_name "get_gem_reverse_dependencies"
       description "Get reverse dependencies - list of gems that depend on the specified gem"
 
       arguments do
@@ -264,6 +275,7 @@ module RubygemsMcp
 
     # Get download statistics for a gem version
     class GetGemVersionDownloadsTool < BaseTool
+      tool_name "get_gem_version_downloads"
       description "Get download statistics for a specific gem version"
 
       arguments do
@@ -278,6 +290,7 @@ module RubygemsMcp
 
     # Get latest gems (most recently added)
     class GetLatestGemsTool < BaseTool
+      tool_name "get_latest_gems"
       description "Get latest gems - most recently added gems to RubyGems.org"
 
       arguments do
@@ -291,6 +304,7 @@ module RubygemsMcp
 
     # Get recently updated gems
     class GetRecentlyUpdatedGemsTool < BaseTool
+      tool_name "get_recently_updated_gems"
       description "Get recently updated gems - most recently updated gem versions"
 
       arguments do
@@ -304,6 +318,7 @@ module RubygemsMcp
 
     # Get changelog summary for a gem
     class GetGemChangelogTool < BaseTool
+      tool_name "get_gem_changelog"
       description "Get changelog summary for a gem by fetching and parsing the changelog from its changelog_uri"
 
       arguments do
@@ -318,6 +333,7 @@ module RubygemsMcp
 
     # Search for gems by name
     class SearchGemsTool < BaseTool
+      tool_name "search_gems"
       description "Search for gems by name on RubyGems"
 
       arguments do
@@ -330,13 +346,13 @@ module RubygemsMcp
     end
 
     # Resource: Popular Ruby gems list
-    class PopularGemsResource < MCP::Resource
+    class PopularGemsResource < FastMcp::Resource
       uri "rubygems://popular"
       resource_name "Popular Ruby Gems"
       description "A curated list of popular Ruby gems with their latest versions"
       mime_type "application/json"
 
-      def default_content
+      def content
         client = Client.new
         popular_gems = %w[
           rails nokogiri bundler rake rspec devise puma sidekiq
@@ -366,13 +382,13 @@ module RubygemsMcp
     end
 
     # Resource: Ruby version compatibility information
-    class RubyVersionCompatibilityResource < MCP::Resource
+    class RubyVersionCompatibilityResource < FastMcp::Resource
       uri "rubygems://ruby/compatibility"
       resource_name "Ruby Version Compatibility"
       description "Information about Ruby version compatibility and release dates"
       mime_type "application/json"
 
-      def default_content
+      def content
         client = Client.new
         ruby_versions = client.get_ruby_versions(limit: 20, sort: :version_desc)
         latest = client.get_latest_ruby_version
@@ -402,13 +418,13 @@ module RubygemsMcp
     end
 
     # Resource: Ruby maintenance status for all versions
-    class RubyMaintenanceStatusResource < MCP::Resource
+    class RubyMaintenanceStatusResource < FastMcp::Resource
       uri "rubygems://ruby/maintenance"
       resource_name "Ruby Maintenance Status"
       description "Detailed maintenance status for all Ruby versions including EOL dates and maintenance phases"
       mime_type "application/json"
 
-      def default_content
+      def content
         client = Client.new
         maintenance_status = client.get_ruby_maintenance_status
 
@@ -428,13 +444,13 @@ module RubygemsMcp
     end
 
     # Resource: Latest Ruby version
-    class LatestRubyVersionResource < MCP::Resource
+    class LatestRubyVersionResource < FastMcp::Resource
       uri "rubygems://ruby/latest"
       resource_name "Latest Ruby Version"
       description "The latest stable Ruby version with release date"
       mime_type "application/json"
 
-      def default_content
+      def content
         client = Client.new
         latest = client.get_latest_ruby_version
         JSON.pretty_generate(latest)

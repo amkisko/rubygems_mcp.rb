@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 0.1.1 (2025-11-21)
+
+- Update fast-mcp dependency version constraints to allow versions >= 0.1 and < 2.0
+- Fix Resource class references to use FastMcp::Resource instead of MCP::Resource
+- Update resource methods from `default_content` to `content` to match fast-mcp 1.0.0+ API
+- Fix test expectations to match fast-mcp API (tool names without `::` separators, resources as Array)
+- Add explicit `tool_name` definitions to all tools for user-friendly snake_case names (e.g., `get_latest_versions` instead of long class names)
+- Fix array argument definitions: Change from `filled(:array)` to `array(:string)` to fix JSON schema conversion errors with dry-schema 1.14.1+ (fixes "Could not find an equivalent conversion for type :array" error)
+
 ## 0.1.0 (2025-01-15)
 
 - Initial release

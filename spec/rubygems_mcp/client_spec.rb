@@ -163,7 +163,7 @@ RSpec.describe RubygemsMcp::Client do
 
         changelog = client.get_ruby_version_changelog(version)
         expect(changelog[:version]).to eq(version)
-        expect(changelog[:summary]).to be_a(String)
+        expect(changelog[:content]).to be_a(String)
       end
     end
 

@@ -109,7 +109,7 @@ begin
     result = client.get_ruby_version_changelog(latest[:version])
     if result.is_a?(Hash) && result[:version]
       puts "   ✓ Success: Got changelog for Ruby #{result[:version]}"
-      puts "   Summary length: #{result[:summary]&.length || 0} chars"
+      puts "   Content length: #{result[:content]&.length || 0} chars"
       puts "   Release notes URL: #{result[:release_notes_url]}"
       tools_tested += 1
     else
@@ -275,7 +275,7 @@ resources_failed = 0
 # 1. PopularGemsResource
 begin
   puts "1. Testing PopularGemsResource..."
-  resource = RubygemsMcp::Server::PopularGemsResource.instance
+  resource = RubygemsMcp::Server::PopularGemsResource.new
   content = JSON.parse(resource.content)
   if content.is_a?(Array) && content.length > 0
     puts "   ✓ Success: Resource has #{content.length} popular gems"
@@ -295,7 +295,7 @@ puts
 # 2. RubyVersionCompatibilityResource
 begin
   puts "2. Testing RubyVersionCompatibilityResource..."
-  resource = RubygemsMcp::Server::RubyVersionCompatibilityResource.instance
+  resource = RubygemsMcp::Server::RubyVersionCompatibilityResource.new
   content = JSON.parse(resource.content)
   if content.is_a?(Hash) && content["latest"]
     puts "   ✓ Success: Resource has compatibility info"
@@ -316,7 +316,7 @@ puts
 # 3. RubyMaintenanceStatusResource
 begin
   puts "3. Testing RubyMaintenanceStatusResource..."
-  resource = RubygemsMcp::Server::RubyMaintenanceStatusResource.instance
+  resource = RubygemsMcp::Server::RubyMaintenanceStatusResource.new
   content = JSON.parse(resource.content)
   if content.is_a?(Hash) && content["versions"]
     puts "   ✓ Success: Resource has #{content["versions"].length} Ruby versions"
@@ -336,7 +336,7 @@ puts
 # 4. LatestRubyVersionResource
 begin
   puts "4. Testing LatestRubyVersionResource..."
-  resource = RubygemsMcp::Server::LatestRubyVersionResource.instance
+  resource = RubygemsMcp::Server::LatestRubyVersionResource.new
   content = JSON.parse(resource.content)
   if content.is_a?(Hash) && content["version"]
     puts "   ✓ Success: Latest Ruby version is #{content["version"]}"

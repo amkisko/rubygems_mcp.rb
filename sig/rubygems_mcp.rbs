@@ -59,7 +59,7 @@ module RubygemsMcp
     ) -> Array[Hash[Symbol, (String | nil)]]
 
     # Get changelog for a Ruby version
-    def get_ruby_version_changelog: (String version) -> Hash[Symbol, (String | nil)]
+    def get_ruby_version_changelog: (String version) -> Hash[Symbol, (String | nil)] # Returns :version, :release_notes_url, :content
 
     # Get reverse dependencies (gems that depend on this gem)
     def get_gem_reverse_dependencies: (String gem_name) -> Array[String]
