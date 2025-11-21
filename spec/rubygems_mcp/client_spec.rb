@@ -381,7 +381,7 @@ RSpec.describe RubygemsMcp::Client do
   end
 
   describe "response size protection" do
-    it "rejects responses larger than 1MB" do
+    it "rejects responses larger than 5MB" do
       # This test requires a custom response, so we use WebMock directly
       # VCR can't easily simulate oversized responses
       # Use a unique gem name that won't match any VCR cassette
@@ -389,29 +389,13 @@ RSpec.describe RubygemsMcp::Client do
         # Clear cache to ensure fresh request
         client.class.cache.clear
 
-        large_body = "x" * (2 * 1024 * 1024) # 2MB
+        large_body = "x" * (6 * 1024 * 1024) # 6MB
         # Use a unique gem name that won't have a VCR cassette
         stub_request(:get, "https://rubygems.org/api/v1/versions/test_size_limit_gem_xyz.json")
           .to_return(status: 200, body: large_body)
 
-        # Temporarily stub the method to use our test URL
-        allow(client).to receive(:make_request) do |uri|
-          if uri.to_s.include?("test_size_limit_gem_xyz")
-            # Simulate the large response
-            response = Net::HTTPResponse.new("1.1", "200", "OK")
-            allow(response).to receive(:body).and_return(large_body)
-            response_body = response.body || ""
-            response_size = response_body.bytesize
-            if response_size > RubygemsMcp::Client::MAX_RESPONSE_SIZE
-              raise RubygemsMcp::Client::ResponseSizeExceededError.new(response_size, RubygemsMcp::Client::MAX_RESPONSE_SIZE)
-            end
-          else
-            client.send(:make_request, uri)
-          end
-        end
-
         expect {
-          # Use a method that will trigger our stubbed make_request
+          # Use the real make_request method which will check response size
           uri = URI("https://rubygems.org/api/v1/versions/test_size_limit_gem_xyz.json")
           client.send(:make_request, uri)
         }.to raise_error(RubygemsMcp::Client::ResponseSizeExceededError) do |error|
@@ -421,7 +405,7 @@ RSpec.describe RubygemsMcp::Client do
       end
     end
 
-    it "accepts responses smaller than 1MB", :vcr do
+    it "accepts responses smaller than 5MB", :vcr do
       VCR.use_cassette("response_size_under_limit") do
         versions = client.get_gem_versions("rails")
         expect(versions).to be_an(Array)

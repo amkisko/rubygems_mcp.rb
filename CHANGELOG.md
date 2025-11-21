@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 0.1.2 (2025-11-21)
+
+- Enhance Ruby version changelog retrieval and increase maximum response size
+- Rename rubygems key to rubygems-dev in mcp.json configuration for development environment setup
+
 ## 0.1.1 (2025-11-21)
 
 - Update fast-mcp dependency version constraints to allow versions >= 0.1 and < 2.0
