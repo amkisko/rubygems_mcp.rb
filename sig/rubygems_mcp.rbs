@@ -1,0 +1,199 @@
+module RubygemsMcp
+  VERSION: String
+
+  class Client
+    MAX_RESPONSE_SIZE: Integer
+
+    class ResponseSizeExceededError < StandardError
+      def initialize: (Integer size, Integer max_size) -> void
+      attr_reader size: Integer
+      attr_reader max_size: Integer
+    end
+
+    class CorruptedDataError < StandardError
+      def initialize: (String message, ?original_error: Exception?, ?response_size: Integer?) -> void
+      attr_reader original_error: Exception?
+      attr_reader response_size: Integer?
+    end
+
+    class Cache
+      def initialize: () -> void
+      def get: (String key) -> untyped?
+      def set: (String key, untyped value, Integer ttl_seconds) -> void
+      def clear: () -> void
+    end
+
+    def self.cache: () -> Cache
+
+    def initialize: (?cache_enabled: bool) -> void
+    def build_http_client: (URI uri) -> Net::HTTP
+    def validate_and_parse_json: (String body, URI uri) -> (Hash[untyped, untyped] | Array[untyped])
+    def validate_and_parse_html: (String body, URI uri) -> Nokogiri::HTML::Document
+
+    # Get latest versions for multiple gems
+    def get_latest_versions: (
+      Array[String] gem_names,
+      ?fields: Array[String]?
+    ) -> Array[Hash[Symbol, untyped]]
+
+    # Get all versions for a gem with pagination, sorting, and field selection
+    def get_gem_versions: (
+      String gem_name,
+      ?limit: Integer?,
+      ?offset: Integer,
+      ?sort: (:version_desc | :version_asc | :date_desc | :date_asc),
+      ?fields: Array[String]?
+    ) -> Array[Hash[Symbol, untyped]]
+
+    # Get latest Ruby version
+    def get_latest_ruby_version: () -> Hash[Symbol, (String | nil)]
+
+    # Get Ruby maintenance status
+    def get_ruby_maintenance_status: () -> Array[Hash[Symbol, (String | nil)]]
+
+    # Get all Ruby versions with download and release notes URLs
+    def get_ruby_versions: (
+      ?limit: Integer?,
+      ?offset: Integer,
+      ?sort: (:version_desc | :version_asc | :date_desc | :date_asc)
+    ) -> Array[Hash[Symbol, (String | nil)]]
+
+    # Get changelog for a Ruby version
+    def get_ruby_version_changelog: (String version) -> Hash[Symbol, (String | nil)]
+
+    # Get reverse dependencies (gems that depend on this gem)
+    def get_gem_reverse_dependencies: (String gem_name) -> Array[String]
+
+    # Get download statistics for a gem version
+    def get_gem_version_downloads: (
+      String gem_name,
+      String version
+    ) -> Hash[Symbol, (String | Integer | nil)]
+
+    # Get latest gems (most recently added)
+    def get_latest_gems: (?limit: Integer) -> Array[Hash[Symbol, untyped]]
+
+    # Get recently updated gems
+    def get_recently_updated_gems: (?limit: Integer) -> Array[Hash[Symbol, untyped]]
+
+    # Get changelog for a gem
+    def get_gem_changelog: (
+      String gem_name,
+      ?version: String?
+    ) -> Hash[Symbol, (String | nil)]
+
+    # Get gem information with field selection
+    def get_gem_info: (
+      String gem_name,
+      ?fields: Array[String]?
+    ) -> Hash[Symbol, untyped]
+
+    # Search for gems with pagination
+    def search_gems: (
+      String query,
+      ?limit: Integer?,
+      ?offset: Integer
+    ) -> Array[Hash[Symbol, untyped]]
+  end
+
+  class Server
+    class NullLogger
+      def initialize: () -> void
+    end
+
+    class BaseTool
+    end
+
+    class GetLatestVersionsTool < BaseTool
+      def call: (Array[String] gem_names, ?Array[String]? fields) -> Array[Hash[Symbol, untyped]]
+    end
+
+    class GetGemVersionsTool < BaseTool
+      def call: (
+        String gem_name,
+        ?Integer? limit,
+        ?Integer offset,
+        ?String sort,
+        ?Array[String]? fields
+      ) -> Array[Hash[Symbol, untyped]]
+    end
+
+    class GetLatestRubyVersionTool < BaseTool
+      def call: () -> Hash[Symbol, (String | nil)]
+    end
+
+    class GetRubyVersionsTool < BaseTool
+      def call: (
+        ?Integer? limit,
+        ?Integer offset,
+        ?String sort
+      ) -> Array[Hash[Symbol, (String | nil)]]
+    end
+
+    class GetRubyVersionChangelogTool < BaseTool
+      def call: (String version) -> Hash[Symbol, (String | nil)]
+    end
+
+    class GetGemInfoTool < BaseTool
+      def call: (String gem_name, ?Array[String]? fields) -> Hash[Symbol, untyped]
+    end
+
+    class GetGemReverseDependenciesTool < BaseTool
+      def call: (String gem_name) -> Array[String]
+    end
+
+    class GetGemVersionDownloadsTool < BaseTool
+      def call: (String gem_name, String version) -> Hash[Symbol, (String | Integer | nil)]
+    end
+
+    class GetLatestGemsTool < BaseTool
+      def call: (?Integer limit) -> Array[Hash[Symbol, untyped]]
+    end
+
+    class GetRecentlyUpdatedGemsTool < BaseTool
+      def call: (?Integer limit) -> Array[Hash[Symbol, untyped]]
+    end
+
+    class GetGemChangelogTool < BaseTool
+      def call: (String gem_name, ?String? version) -> Hash[Symbol, (String | nil)]
+    end
+
+    class SearchGemsTool < BaseTool
+      def call: (String query) -> Array[Hash[Symbol, untyped]]
+    end
+
+    class PopularGemsResource
+      def self.uri: () -> String
+      def self.resource_name: () -> String
+      def uri: () -> String
+      def content: () -> String
+    end
+
+    class RubyVersionCompatibilityResource
+      def self.uri: () -> String
+      def self.resource_name: () -> String
+      def uri: () -> String
+      def content: () -> String
+    end
+
+    class RubyMaintenanceStatusResource
+      def self.uri: () -> String
+      def self.resource_name: () -> String
+      def uri: () -> String
+      def content: () -> String
+    end
+
+    class LatestRubyVersionResource
+      def self.uri: () -> String
+      def self.resource_name: () -> String
+      def uri: () -> String
+      def content: () -> String
+    end
+
+    def self.start: () -> void
+    def self.register_tools: (untyped server) -> void
+    def self.register_resources: (untyped server) -> void
+  end
+end
+
+

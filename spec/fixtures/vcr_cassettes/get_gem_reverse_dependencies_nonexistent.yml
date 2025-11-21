@@ -1,0 +1,89 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://rubygems.org/api/v1/gems/nonexistent_gem_xyz_123/reverse_dependencies.json
+    body:
+      encoding: US-ASCII
+      base64_string: ''
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - application/json
+      User-Agent:
+      - rubygems_mcp/0.1.0
+      Host:
+      - rubygems.org
+  response:
+    status:
+      code: 404
+      message: Not Found
+    headers:
+      Connection:
+      - keep-alive
+      Content-Type:
+      - text/plain; charset=utf-8
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - '0'
+      X-Content-Type-Options:
+      - nosniff
+      X-Permitted-Cross-Domain-Policies:
+      - none
+      Referrer-Policy:
+      - strict-origin-when-cross-origin
+      Cross-Origin-Opener-Policy:
+      - same-origin
+      Cache-Control:
+      - no-cache
+      Content-Security-Policy:
+      - 'default-src ''self''; font-src ''self'' https://fonts.gstatic.com; img-src
+        ''self'' data: https://secure.gaug.es https://gravatar.com https://www.gravatar.com
+        https://secure.gravatar.com https://*.fastly-insights.com https://avatars.githubusercontent.com;
+        object-src ''none''; script-src ''self'' ''sha256-azSWmMHKuxlIULceWMzTCcGRpzgQb+ekrQnQm8duQMU=''
+        https://secure.gaug.es https://www.fastly-insights.com ''nonce-aeb682c7d2720e736f61d6e13560bb7d'';
+        style-src ''self'' ''unsafe-inline'' https://fonts.googleapis.com; connect-src
+        ''self'' https://s3-us-west-2.amazonaws.com/rubygems-dumps/ https://*.fastly-insights.com
+        https://fastly-insights.com https://api.github.com http://localhost:*; form-action
+        ''self'' https://github.com/login/oauth/authorize; frame-ancestors ''self'';
+        base-uri ''self''; report-uri https://csp-report.browser-intake-datadoghq.com/api/v2/logs?dd-api-key=pub852fa3e2312391fafa5640b60784e660&dd-evp-origin=content-security-policy&ddsource=csp-report&ddtags=service%3Arubygems.org%2Cversion%3Af48831beb0f323a0a045199ac05407636f8b94d5%2Cenv%3Aproduction%2Ctrace_id%3A69201f670000000012df18968d590389'
+      Set-Cookie:
+      - _rubygems_session=VjrAzgLb8%2F1Tsfz5NAXeMs6lVrHlUvAN4Nx5fJcLSsBfcdPEBaRyP7o84PNrDeK8afAphCe%2B4bSx4Kc8VBCP18A%2FEHONFMhhiHOznFipgKPHBuSjq2YRV52DYTB9DHq7%2FazITI53RfW7ZCXqacteiw3IZkiG8ozUzolzrlqFfav6agQSAEPvqQE%3D--jZVSNWODATsrWcvt--pDYENuB5Hhc56xS7%2BI3ceA%3D%3D;
+        path=/; secure; httponly; samesite=strict
+      X-Request-Id:
+      - 5d3a32ee-1a88-4c46-8d0a-2dc5f50c0931
+      X-Runtime:
+      - '0.006412'
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Backend:
+      - F_Rails 54.186.219.57:443
+      Accept-Ranges:
+      - bytes
+      Date:
+      - Fri, 21 Nov 2025 08:14:31 GMT
+      Via:
+      - 1.1 varnish
+      X-Served-By:
+      - cache-hel1410020-HEL
+      X-Cache:
+      - MISS
+      X-Cache-Hits:
+      - '0'
+      X-Timer:
+      - S1763712871.071862,VS0,VE514
+      Vary:
+      - Accept-Encoding
+      Server:
+      - RubyGems.org
+      Transfer-Encoding:
+      - chunked
+    body:
+      encoding: ASCII-8BIT
+      base64_string: 'VGhpcyBydWJ5Z2VtIGNvdWxkIG5vdCBiZSBmb3VuZC4=
+
+        '
+  recorded_at: Fri, 21 Nov 2025 08:14:31 GMT
+recorded_with: VCR 6.3.1

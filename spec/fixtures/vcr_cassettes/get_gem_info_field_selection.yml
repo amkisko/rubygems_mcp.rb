@@ -1,0 +1,139 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://rubygems.org/api/v1/gems/rails.json
+    body:
+      encoding: US-ASCII
+      base64_string: ''
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - application/json
+      User-Agent:
+      - rubygems_mcp/0.1.0
+      Host:
+      - rubygems.org
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '2096'
+      Content-Type:
+      - application/json; charset=utf-8
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - '0'
+      X-Content-Type-Options:
+      - nosniff
+      X-Permitted-Cross-Domain-Policies:
+      - none
+      Referrer-Policy:
+      - strict-origin-when-cross-origin
+      Cross-Origin-Opener-Policy:
+      - same-origin
+      Access-Control-Allow-Origin:
+      - "*"
+      Access-Control-Allow-Methods:
+      - GET
+      Access-Control-Max-Age:
+      - '1728000'
+      Cache-Control:
+      - max-age=60, public
+      Content-Security-Policy:
+      - 'default-src ''self''; font-src ''self'' https://fonts.gstatic.com; img-src
+        ''self'' data: https://secure.gaug.es https://gravatar.com https://www.gravatar.com
+        https://secure.gravatar.com https://*.fastly-insights.com https://avatars.githubusercontent.com;
+        object-src ''none''; script-src ''self'' ''sha256-azSWmMHKuxlIULceWMzTCcGRpzgQb+ekrQnQm8duQMU=''
+        https://secure.gaug.es https://www.fastly-insights.com ''nonce-7385b4c834c519d2608121c2567bc872'';
+        style-src ''self'' ''unsafe-inline'' https://fonts.googleapis.com; connect-src
+        ''self'' https://s3-us-west-2.amazonaws.com/rubygems-dumps/ https://*.fastly-insights.com
+        https://fastly-insights.com https://api.github.com http://localhost:*; form-action
+        ''self'' https://github.com/login/oauth/authorize; frame-ancestors ''self'';
+        base-uri ''self''; report-uri https://csp-report.browser-intake-datadoghq.com/api/v2/logs?dd-api-key=pub852fa3e2312391fafa5640b60784e660&dd-evp-origin=content-security-policy&ddsource=csp-report&ddtags=service%3Arubygems.org%2Cversion%3Af48831beb0f323a0a045199ac05407636f8b94d5%2Cenv%3Aproduction%2Ctrace_id%3A692011de0000000004c708398c231009'
+      X-Request-Id:
+      - 46858eba-8f5b-4769-83e7-6954868c6ff9
+      X-Runtime:
+      - '0.061504'
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Backend:
+      - F_Rails 54.214.200.219:443
+      Accept-Ranges:
+      - bytes
+      Age:
+      - '3735'
+      Date:
+      - Fri, 21 Nov 2025 08:19:01 GMT
+      Via:
+      - 1.1 varnish
+      X-Served-By:
+      - cache-hel1410030-HEL
+      X-Cache:
+      - HIT
+      X-Cache-Hits:
+      - '0'
+      X-Timer:
+      - S1763713141.131078,VS0,VE1
+      Vary:
+      - Accept-Encoding
+      Server:
+      - RubyGems.org
+    body:
+      encoding: ASCII-8BIT
+      base64_string: |
+        eyJuYW1lIjoicmFpbHMiLCJkb3dubG9hZHMiOjY4NDczMDgyMiwidmVyc2lv
+        biI6IjguMS4xIiwidmVyc2lvbl9jcmVhdGVkX2F0IjoiMjAyNS0xMC0yOFQy
+        Mzo0ODowMC4xODlaIiwidmVyc2lvbl9kb3dubG9hZHMiOjQ4NDMzMCwicGxh
+        dGZvcm0iOiJydWJ5IiwiYXV0aG9ycyI6IkRhdmlkIEhlaW5lbWVpZXIgSGFu
+        c3NvbiIsImluZm8iOiJSdWJ5IG9uIFJhaWxzIGlzIGEgZnVsbC1zdGFjayB3
+        ZWIgZnJhbWV3b3JrIG9wdGltaXplZCBmb3IgcHJvZ3JhbW1lciBoYXBwaW5l
+        c3MgYW5kIHN1c3RhaW5hYmxlIHByb2R1Y3Rpdml0eS4gSXQgZW5jb3VyYWdl
+        cyBiZWF1dGlmdWwgY29kZSBieSBmYXZvcmluZyBjb252ZW50aW9uIG92ZXIg
+        Y29uZmlndXJhdGlvbi4iLCJsaWNlbnNlcyI6WyJNSVQiXSwibWV0YWRhdGEi
+        OnsiY2hhbmdlbG9nX3VyaSI6Imh0dHBzOi8vZ2l0aHViLmNvbS9yYWlscy9y
+        YWlscy9yZWxlYXNlcy90YWcvdjguMS4xIiwiYnVnX3RyYWNrZXJfdXJpIjoi
+        aHR0cHM6Ly9naXRodWIuY29tL3JhaWxzL3JhaWxzL2lzc3VlcyIsInNvdXJj
+        ZV9jb2RlX3VyaSI6Imh0dHBzOi8vZ2l0aHViLmNvbS9yYWlscy9yYWlscy90
+        cmVlL3Y4LjEuMSIsIm1haWxpbmdfbGlzdF91cmkiOiJodHRwczovL2Rpc2N1
+        c3MucnVieW9ucmFpbHMub3JnL2MvcnVieW9ucmFpbHMtdGFsayIsImRvY3Vt
+        ZW50YXRpb25fdXJpIjoiaHR0cHM6Ly9hcGkucnVieW9ucmFpbHMub3JnL3Y4
+        LjEuMS8iLCJydWJ5Z2Vtc19tZmFfcmVxdWlyZWQiOiJ0cnVlIn0sInlhbmtl
+        ZCI6ZmFsc2UsInNoYSI6Ijg3NzUwOWI3YWVmMzA5MjM5OTc4Njg1ODgzMDk3
+        ZDJjMDNlMjEzODNhNTBhM2Y3ODg4MmNmOWIzYjVjMTM2ZjciLCJzcGVjX3No
+        YSI6ImYzZDI1OTdlZGM1YTc1OTNkN2M0NDcxNTQyZGRjNDNjNjU2ZjVhMDQy
+        MTA5ZGI3OTM1OWNmZDBiZGMwYzQ3MDgiLCJwcm9qZWN0X3VyaSI6Imh0dHBz
+        Oi8vcnVieWdlbXMub3JnL2dlbXMvcmFpbHMiLCJnZW1fdXJpIjoiaHR0cHM6
+        Ly9ydWJ5Z2Vtcy5vcmcvZ2Vtcy9yYWlscy04LjEuMS5nZW0iLCJob21lcGFn
+        ZV91cmkiOiJodHRwczovL3J1YnlvbnJhaWxzLm9yZyIsIndpa2lfdXJpIjpu
+        dWxsLCJkb2N1bWVudGF0aW9uX3VyaSI6Imh0dHBzOi8vYXBpLnJ1YnlvbnJh
+        aWxzLm9yZy92OC4xLjEvIiwibWFpbGluZ19saXN0X3VyaSI6Imh0dHBzOi8v
+        ZGlzY3Vzcy5ydWJ5b25yYWlscy5vcmcvYy9ydWJ5b25yYWlscy10YWxrIiwi
+        c291cmNlX2NvZGVfdXJpIjoiaHR0cHM6Ly9naXRodWIuY29tL3JhaWxzL3Jh
+        aWxzL3RyZWUvdjguMS4xIiwiYnVnX3RyYWNrZXJfdXJpIjoiaHR0cHM6Ly9n
+        aXRodWIuY29tL3JhaWxzL3JhaWxzL2lzc3VlcyIsImNoYW5nZWxvZ191cmki
+        OiJodHRwczovL2dpdGh1Yi5jb20vcmFpbHMvcmFpbHMvcmVsZWFzZXMvdGFn
+        L3Y4LjEuMSIsImZ1bmRpbmdfdXJpIjpudWxsLCJkZXBlbmRlbmNpZXMiOnsi
+        ZGV2ZWxvcG1lbnQiOltdLCJydW50aW1lIjpbeyJuYW1lIjoiYWN0aW9uY2Fi
+        bGUiLCJyZXF1aXJlbWVudHMiOiI9IDguMS4xIn0seyJuYW1lIjoiYWN0aW9u
+        bWFpbGJveCIsInJlcXVpcmVtZW50cyI6Ij0gOC4xLjEifSx7Im5hbWUiOiJh
+        Y3Rpb25tYWlsZXIiLCJyZXF1aXJlbWVudHMiOiI9IDguMS4xIn0seyJuYW1l
+        IjoiYWN0aW9ucGFjayIsInJlcXVpcmVtZW50cyI6Ij0gOC4xLjEifSx7Im5h
+        bWUiOiJhY3Rpb250ZXh0IiwicmVxdWlyZW1lbnRzIjoiPSA4LjEuMSJ9LHsi
+        bmFtZSI6ImFjdGlvbnZpZXciLCJyZXF1aXJlbWVudHMiOiI9IDguMS4xIn0s
+        eyJuYW1lIjoiYWN0aXZlam9iIiwicmVxdWlyZW1lbnRzIjoiPSA4LjEuMSJ9
+        LHsibmFtZSI6ImFjdGl2ZW1vZGVsIiwicmVxdWlyZW1lbnRzIjoiPSA4LjEu
+        MSJ9LHsibmFtZSI6ImFjdGl2ZXJlY29yZCIsInJlcXVpcmVtZW50cyI6Ij0g
+        OC4xLjEifSx7Im5hbWUiOiJhY3RpdmVzdG9yYWdlIiwicmVxdWlyZW1lbnRz
+        IjoiPSA4LjEuMSJ9LHsibmFtZSI6ImFjdGl2ZXN1cHBvcnQiLCJyZXF1aXJl
+        bWVudHMiOiI9IDguMS4xIn0seyJuYW1lIjoiYnVuZGxlciIsInJlcXVpcmVt
+        ZW50cyI6Ilx1MDAzZT0gMS4xNS4wIn0seyJuYW1lIjoicmFpbHRpZXMiLCJy
+        ZXF1aXJlbWVudHMiOiI9IDguMS4xIn1dfX0=
+  recorded_at: Fri, 21 Nov 2025 08:19:01 GMT
+recorded_with: VCR 6.3.1
