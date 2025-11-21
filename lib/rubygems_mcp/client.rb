@@ -14,8 +14,8 @@ module RubygemsMcp
   #   all_versions = client.get_gem_versions("rails")
   #   ruby_version = client.get_latest_ruby_version
   class Client
-    # Maximum response size (1MB) to protect against crawler protection pages
-    MAX_RESPONSE_SIZE = 1024 * 1024 # 1MB
+    # Maximum response size (5MB) to protect against crawler protection pages
+    MAX_RESPONSE_SIZE = 5 * 1024 * 1024 # 5MB
 
     # Custom exception for corrupted data
     class CorruptedDataError < StandardError
@@ -351,12 +351,30 @@ module RubygemsMcp
 
     # Get full changelog content for a Ruby version from release notes
     #
-    # @param version [String] Ruby version (e.g., "3.4.7")
+    # @param version [String] Ruby version (e.g., "3.4.7" or "4.0.0-preview2")
     # @return [Hash] Hash with :version, :release_notes_url, and :content (full content)
     def get_ruby_version_changelog(version)
       # First get the release notes URL for this version
       versions = get_ruby_versions
-      version_data = versions.find { |v| v[:version] == version }
+
+      # Normalize the input version for comparison (handles formats like "4.0.0-preview2" -> "4.0.0.pre.preview2")
+      normalized_input = begin
+        Gem::Version.new(version).to_s
+      rescue ArgumentError
+        version
+      end
+
+      # Try exact match first, then normalized match
+      version_data = versions.find do |v|
+        v[:version] == version ||
+          v[:version] == normalized_input ||
+          begin
+            Gem::Version.new(v[:version]).to_s == normalized_input
+          rescue ArgumentError
+            false
+          end
+      end
+
       return {version: version, release_notes_url: nil, content: nil, error: "Version not found"} unless version_data
 
       release_notes_url = version_data[:release_notes_url]

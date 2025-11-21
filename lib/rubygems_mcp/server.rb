@@ -240,7 +240,30 @@ module RubygemsMcp
       end
 
       def call(version:)
-        get_client.get_ruby_version_changelog(version)
+        result = get_client.get_ruby_version_changelog(version)
+        # Convert content to MCP-compliant format
+        # MCP expects content to be an array of content items with type and text fields
+        if result.is_a?(Hash)
+          if result[:content].is_a?(String) && !result[:content].empty?
+            result[:content] = [{type: "text", text: result[:content]}]
+          elsif result[:content].is_a?(String) && result[:content].empty?
+            result[:content] = []
+          elsif result[:content].nil?
+            result[:content] = []
+          elsif result[:content].is_a?(Array)
+            # Ensure array elements have the correct format
+            result[:content] = result[:content].map do |item|
+              if item.is_a?(String)
+                {type: "text", text: item}
+              elsif item.is_a?(Hash) && !item.key?(:type)
+                item.merge(type: "text")
+              else
+                item
+              end
+            end
+          end
+        end
+        result
       end
     end
 
