@@ -30,19 +30,6 @@ For Cursor IDE, create or update `.cursor/mcp.json` in your project:
 {
   "mcpServers": {
     "rubygems": {
-      "command": "bundle",
-      "args": ["exec", "rubygems_mcp"]
-    }
-  }
-}
-```
-
-Or if installed globally:
-
-```json
-{
-  "mcpServers": {
-    "rubygems": {
       "command": "rubygems_mcp"
     }
   }
@@ -55,20 +42,6 @@ For Claude Desktop, edit the MCP configuration file:
 
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "rubygems": {
-      "command": "bundle",
-      "args": ["exec", "rubygems_mcp"],
-      "cwd": "/path/to/your/project"
-    }
-  }
-}
-```
-
-Or if installed globally:
 
 ```json
 {
