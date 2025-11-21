@@ -130,6 +130,10 @@ module RubygemsMcp
       server.register_tool(GetRecentlyUpdatedGemsTool)
       server.register_tool(GetGemChangelogTool)
       server.register_tool(SearchGemsTool)
+      server.register_tool(GetRubyRoadmapTool)
+      server.register_tool(GetRubyVersionRoadmapDetailsTool)
+      server.register_tool(GetRubyVersionGithubChangelogTool)
+      server.register_tool(GetGemVersionInfoTool)
     end
 
     def self.register_resources(server)
@@ -282,6 +286,22 @@ module RubygemsMcp
       end
     end
 
+    # Get detailed information for a specific gem version
+    class GetGemVersionInfoTool < BaseTool
+      tool_name "get_gem_version_info"
+      description "Get detailed information for a specific gem version using RubyGems API v2. Returns version-specific details including download counts, dependencies, SHA checksums, and creation date for that exact version."
+
+      arguments do
+        required(:gem_name).filled(:string).description("Gem name (e.g., 'devise')")
+        required(:version).filled(:string).description("Version string (e.g., '0.1.0', '4.9.4')")
+        optional(:fields).array(:string).description("GraphQL-like field selection. Available: name, version, summary, description, homepage, source_code, documentation, licenses, authors, info, downloads, version_downloads, yanked, dependencies, changelog_uri, funding_uri, platform, sha, spec_sha, metadata, version_created_at, built_at, prerelease, rubygems_version, ruby_version, requirements, gem_uri, project_uri, wiki_uri, mailing_list_uri, bug_tracker_uri")
+      end
+
+      def call(gem_name:, version:, fields: nil)
+        get_client.get_gem_version_info(gem_name, version, fields: fields)
+      end
+    end
+
     # Get reverse dependencies (gems that depend on this gem)
     class GetGemReverseDependenciesTool < BaseTool
       tool_name "get_gem_reverse_dependencies"
@@ -368,6 +388,48 @@ module RubygemsMcp
       end
     end
 
+    # Get Ruby roadmap information
+    class GetRubyRoadmapTool < BaseTool
+      tool_name "get_ruby_roadmap"
+      description "Get Ruby roadmap information from bugs.ruby-lang.org showing planned versions and their issues"
+
+      arguments do
+        # No arguments required
+      end
+
+      def call
+        get_client.get_ruby_roadmap
+      end
+    end
+
+    # Get detailed roadmap information for a specific Ruby version
+    class GetRubyVersionRoadmapDetailsTool < BaseTool
+      tool_name "get_ruby_version_roadmap_details"
+      description "Get detailed roadmap information for a specific Ruby version from bugs.ruby-lang.org, including issues and features planned for that version"
+
+      arguments do
+        required(:version).filled(:string).description("Ruby version (e.g., '3.4', '4.0')")
+      end
+
+      def call(version:)
+        get_client.get_ruby_version_roadmap_details(version)
+      end
+    end
+
+    # Get GitHub release changelog for a Ruby version
+    class GetRubyVersionGithubChangelogTool < BaseTool
+      tool_name "get_ruby_version_github_changelog"
+      description "Get GitHub release changelog for a Ruby version from the ruby/ruby repository"
+
+      arguments do
+        required(:version).filled(:string).description("Ruby version (e.g., '3.4.7', '3.4.0')")
+      end
+
+      def call(version:)
+        get_client.get_ruby_version_github_changelog(version)
+      end
+    end
+
     # Resource: Popular Ruby gems list
     class PopularGemsResource < FastMcp::Resource
       uri "rubygems://popular"
@@ -393,7 +455,7 @@ module RubygemsMcp
           else
             {name: gem_name, version: nil, release_date: nil}
           end
-        rescue Client::ResponseSizeExceededError, Client::CorruptedDataError => e
+        rescue ResponseSizeExceededError, CorruptedDataError => e
           # Skip gems that exceed size limit or have corrupted data
           {name: gem_name, version: nil, release_date: nil, error: e.message}
         end

@@ -1,6 +1,6 @@
 # rubygems_mcp
 
-[![Gem Version](https://badge.fury.io/rb/rubygems_mcp.svg?v=0.1.1)](https://badge.fury.io/rb/rubygems_mcp) [![Test Status](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml/badge.svg)](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/amkisko/rubygems_mcp.rb/graph/badge.svg?token=APQ6AK7EC9)](https://codecov.io/gh/amkisko/rubygems_mcp.rb)
+[![Gem Version](https://badge.fury.io/rb/rubygems_mcp.svg?v=0.1.3)](https://badge.fury.io/rb/rubygems_mcp) [![Test Status](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml/badge.svg)](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/amkisko/rubygems_mcp.rb/graph/badge.svg?token=APQ6AK7EC9)](https://codecov.io/gh/amkisko/rubygems_mcp.rb)
 
 Ruby gem providing RubyGems and Ruby version information via MCP (Model Context Protocol) server tools. Integrates with MCP-compatible clients like Cursor IDE, Claude Desktop, and other MCP-enabled tools.
 
@@ -93,7 +93,7 @@ The server will start and communicate via STDIN/STDOUT using the MCP protocol.
 
 - **RubyGems API Client**: Full-featured client for RubyGems REST API with comprehensive endpoint coverage
 - **Ruby Version Information**: Fetch Ruby release information, changelogs, and maintenance status from ruby-lang.org
-- **MCP Server Integration**: Ready-to-use MCP server with 12 tools and 4 resources, compatible with Cursor IDE, Claude Desktop, and other MCP-enabled tools
+- **MCP Server Integration**: Ready-to-use MCP server with 19 tools and 4 resources, compatible with Cursor IDE, Claude Desktop, and other MCP-enabled tools
 - **Pagination & Sorting**: Support for large result sets with customizable pagination and sorting options
 - **Caching**: In-memory caching with configurable TTL for improved performance
 - **Error Handling**: Graceful error handling with custom exceptions and response size limits
@@ -196,11 +196,15 @@ recently_updated = client.get_recently_updated_gems(limit: 10)
 - `get_latest_ruby_version` - Get latest Ruby version with release date
 - `get_ruby_versions(limit: nil, offset: 0, sort: :version_desc)` - Get all Ruby versions with release dates, download URLs, and release notes URLs, sorted by version descending. Supports pagination and sorting.
 - `get_ruby_version_changelog(version)` - Get changelog summary for a specific Ruby version by fetching and parsing the release notes
+- `get_ruby_version_github_changelog(version)` - Get GitHub release changelog for a Ruby version from the ruby/ruby repository
+- `get_ruby_roadmap` - Get Ruby roadmap information from bugs.ruby-lang.org showing planned versions and their issues
+- `get_ruby_version_roadmap_details(version)` - Get detailed roadmap information for a specific Ruby version from bugs.ruby-lang.org, including issues and features planned for that version
 - `get_ruby_maintenance_status` - Get maintenance status for all Ruby versions including EOL dates and maintenance phases
 
 ### Gem Information
 
 - `get_gem_info(gem_name, fields: nil)` - Get detailed information about a gem (summary, homepage, source code, documentation, licenses, authors, dependencies, downloads). Supports GraphQL-like field selection.
+- `get_gem_version_info(gem_name, version, fields: nil)` - Get detailed information for a specific gem version using RubyGems API v2 (version-specific downloads, dependencies, SHA checksums, creation date, built date). Supports GraphQL-like field selection.
 - `get_gem_reverse_dependencies(gem_name)` - Get reverse dependencies - list of gems that depend on the specified gem
 - `get_gem_version_downloads(gem_name, version)` - Get download statistics for a specific gem version
 - `get_gem_changelog(gem_name, version: nil)` - Get changelog summary for a gem by fetching and parsing the changelog from its changelog_uri
@@ -251,23 +255,35 @@ The MCP server provides the following tools:
 6. **get_gem_info** - Get detailed information about a gem (summary, homepage, source code, documentation, licenses, authors, dependencies, downloads). Supports GraphQL-like field selection.
    - Parameters: `gem_name` (string), `fields` (optional array of strings)
 
-7. **get_gem_reverse_dependencies** - Get reverse dependencies - list of gems that depend on the specified gem
+7. **get_gem_version_info** - Get detailed information for a specific gem version using RubyGems API v2 (version-specific downloads, dependencies, SHA checksums, creation date, built date). Supports GraphQL-like field selection.
+   - Parameters: `gem_name` (string), `version` (string, e.g., "0.1.0" or "1.15.0-x86_64-linux"), `fields` (optional array of strings)
+
+8. **get_gem_reverse_dependencies** - Get reverse dependencies - list of gems that depend on the specified gem
    - Parameters: `gem_name` (string)
 
-8. **get_gem_version_downloads** - Get download statistics for a specific gem version
+9. **get_gem_version_downloads** - Get download statistics for a specific gem version
    - Parameters: `gem_name` (string), `version` (string)
 
-9. **get_latest_gems** - Get latest gems - most recently added gems to RubyGems.org
+10. **get_latest_gems** - Get latest gems - most recently added gems to RubyGems.org
    - Parameters: `limit` (optional integer, default: 30, max: 50)
 
-10. **get_recently_updated_gems** - Get recently updated gems - most recently updated gem versions
-    - Parameters: `limit` (optional integer, default: 30, max: 50)
+11. **get_recently_updated_gems** - Get recently updated gems - most recently updated gem versions
+   - Parameters: `limit` (optional integer, default: 30, max: 50)
 
-11. **get_gem_changelog** - Get changelog summary for a gem by fetching and parsing the changelog from its changelog_uri
-    - Parameters: `gem_name` (string), `version` (optional string, uses latest if not provided)
+12. **get_gem_changelog** - Get changelog summary for a gem by fetching and parsing the changelog from its changelog_uri
+   - Parameters: `gem_name` (string), `version` (optional string, uses latest if not provided)
 
-12. **search_gems** - Search for gems by name on RubyGems
-    - Parameters: `query` (string)
+13. **search_gems** - Search for gems by name on RubyGems
+   - Parameters: `query` (string)
+
+14. **get_ruby_roadmap** - Get Ruby roadmap information from bugs.ruby-lang.org showing planned versions and their issues
+   - Parameters: none
+
+15. **get_ruby_version_roadmap_details** - Get detailed roadmap information for a specific Ruby version from bugs.ruby-lang.org, including issues and features planned for that version
+   - Parameters: `version` (string, e.g., "3.4", "4.0")
+
+16. **get_ruby_version_github_changelog** - Get GitHub release changelog for a Ruby version from the ruby/ruby repository
+   - Parameters: `version` (string, e.g., "3.4.7", "3.4.0")
 
 ## MCP Resources
 

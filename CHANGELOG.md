@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 0.1.3 (2025-11-21)
+
+- Add Ruby roadmap tools: `get_ruby_roadmap` and `get_ruby_version_roadmap_details` for accessing Ruby version planning information from bugs.ruby-lang.org
+- Add `get_ruby_version_github_changelog` tool to fetch GitHub release changelogs for Ruby versions
+- Improve error handling with new error classes (ValidationError, improved CorruptedDataError with URI information)
+- Add input validation for all API methods (gem names, version strings, pagination parameters, sort orders)
+- Enhance error messages with URI information for better debugging
+- Increase maximum response size limit for Ruby version changelog retrieval
+
 ## 0.1.2 (2025-11-21)
 
 - Enhance Ruby version changelog retrieval and increase maximum response size

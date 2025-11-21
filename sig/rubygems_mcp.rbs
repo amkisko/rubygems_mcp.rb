@@ -1,20 +1,43 @@
 module RubygemsMcp
   VERSION: String
 
+  # Base error class for all RubygemsMcp errors
+  class Error < StandardError; end
+
+  # HTTP/API errors
+  class APIError < Error
+    def initialize: (String message, ?status_code: Integer?, ?response_data: untyped?, ?uri: String?) -> void
+    attr_reader status_code: Integer?
+    attr_reader response_data: untyped?
+    attr_reader uri: String?
+  end
+
+  class NotFoundError < APIError; end
+  class ServerError < APIError; end
+  class ClientError < APIError; end
+
+  # Data validation errors
+  class CorruptedDataError < Error
+    def initialize: (String message, ?original_error: Exception?, ?response_size: Integer?, ?uri: String?) -> void
+    attr_reader original_error: Exception?
+    attr_reader response_size: Integer?
+    attr_reader uri: String?
+  end
+
+  class ResponseSizeExceededError < Error
+    def initialize: (Integer size, Integer max_size, ?uri: String?) -> void
+    attr_reader size: Integer
+    attr_reader max_size: Integer
+    attr_reader uri: String?
+  end
+
+  # Input validation errors
+  class ValidationError < Error; end
+
   class Client
     MAX_RESPONSE_SIZE: Integer
-
-    class ResponseSizeExceededError < StandardError
-      def initialize: (Integer size, Integer max_size) -> void
-      attr_reader size: Integer
-      attr_reader max_size: Integer
-    end
-
-    class CorruptedDataError < StandardError
-      def initialize: (String message, ?original_error: Exception?, ?response_size: Integer?) -> void
-      attr_reader original_error: Exception?
-      attr_reader response_size: Integer?
-    end
+    VALID_SORT_ORDERS: Array[Symbol]
+    MAX_LIMIT: Integer
 
     class Cache
       def initialize: () -> void
@@ -59,7 +82,16 @@ module RubygemsMcp
     ) -> Array[Hash[Symbol, (String | nil)]]
 
     # Get changelog for a Ruby version
-    def get_ruby_version_changelog: (String version) -> Hash[Symbol, (String | nil)] # Returns :version, :release_notes_url, :content
+    def get_ruby_version_changelog: (String version) -> Hash[Symbol, (String | nil)] # Returns :version, :release_notes_url, :content, :github_changelog
+
+    # Get Ruby roadmap information
+    def get_ruby_roadmap: () -> Hash[Symbol, Array[Hash[Symbol, (String | Integer | nil)]]] # Returns :versions array
+
+    # Get detailed roadmap information for a specific Ruby version
+    def get_ruby_version_roadmap_details: (String version) -> Hash[Symbol, (String | Array[Hash[Symbol, (String | nil)]] | nil)] # Returns :version, :version_url, :description, :issues
+
+    # Get GitHub release changelog for a Ruby version
+    def get_ruby_version_github_changelog: (String version) -> Hash[Symbol, (String | nil)] # Returns :version, :tag_name, :name, :body, :published_at, :url
 
     # Get reverse dependencies (gems that depend on this gem)
     def get_gem_reverse_dependencies: (String gem_name) -> Array[String]
@@ -85,6 +117,13 @@ module RubygemsMcp
     # Get gem information with field selection
     def get_gem_info: (
       String gem_name,
+      ?fields: Array[String]?
+    ) -> Hash[Symbol, untyped]
+
+    # Get detailed information for a specific gem version (uses API v2)
+    def get_gem_version_info: (
+      String gem_name,
+      String version,
       ?fields: Array[String]?
     ) -> Hash[Symbol, untyped]
 
@@ -138,6 +177,10 @@ module RubygemsMcp
       def call: (String gem_name, ?Array[String]? fields) -> Hash[Symbol, untyped]
     end
 
+    class GetGemVersionInfoTool < BaseTool
+      def call: (String gem_name, String version, ?Array[String]? fields) -> Hash[Symbol, untyped]
+    end
+
     class GetGemReverseDependenciesTool < BaseTool
       def call: (String gem_name) -> Array[String]
     end
@@ -160,6 +203,18 @@ module RubygemsMcp
 
     class SearchGemsTool < BaseTool
       def call: (String query) -> Array[Hash[Symbol, untyped]]
+    end
+
+    class GetRubyRoadmapTool < BaseTool
+      def call: () -> Hash[Symbol, Array[Hash[Symbol, (String | Integer | nil)]]]
+    end
+
+    class GetRubyVersionRoadmapDetailsTool < BaseTool
+      def call: (String version) -> Hash[Symbol, (String | Array[Hash[Symbol, (String | nil)]] | nil)]
+    end
+
+    class GetRubyVersionGithubChangelogTool < BaseTool
+      def call: (String version) -> Hash[Symbol, (String | nil)]
     end
 
     class PopularGemsResource

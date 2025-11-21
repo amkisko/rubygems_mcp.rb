@@ -1,0 +1,126 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://rubygems.org/api/v2/rubygems/devise/versions/0.1.0.json
+    body:
+      encoding: US-ASCII
+      base64_string: ''
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - application/json
+      User-Agent:
+      - rubygems_mcp/0.1.2
+      Host:
+      - rubygems.org
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '1601'
+      Content-Type:
+      - application/json; charset=utf-8
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - '0'
+      X-Content-Type-Options:
+      - nosniff
+      X-Permitted-Cross-Domain-Policies:
+      - none
+      Referrer-Policy:
+      - strict-origin-when-cross-origin
+      Cross-Origin-Opener-Policy:
+      - same-origin
+      Last-Modified:
+      - Sat, 01 Jun 2024 03:48:52 GMT
+      Cache-Control:
+      - max-age=60, public
+      Content-Security-Policy:
+      - 'default-src ''self''; font-src ''self'' https://fonts.gstatic.com; img-src
+        ''self'' data: https://secure.gaug.es https://gravatar.com https://www.gravatar.com
+        https://secure.gravatar.com https://*.fastly-insights.com https://avatars.githubusercontent.com;
+        object-src ''none''; script-src ''self'' ''sha256-azSWmMHKuxlIULceWMzTCcGRpzgQb+ekrQnQm8duQMU=''
+        https://secure.gaug.es https://www.fastly-insights.com ''nonce-a5d9d884b45922ea349471ffd07688b2'';
+        style-src ''self'' ''unsafe-inline'' https://fonts.googleapis.com; connect-src
+        ''self'' https://s3-us-west-2.amazonaws.com/rubygems-dumps/ https://*.fastly-insights.com
+        https://fastly-insights.com https://api.github.com http://localhost:*; form-action
+        ''self'' https://github.com/login/oauth/authorize; frame-ancestors ''self'';
+        base-uri ''self''; report-uri https://csp-report.browser-intake-datadoghq.com/api/v2/logs?dd-api-key=pub852fa3e2312391fafa5640b60784e660&dd-evp-origin=content-security-policy&ddsource=csp-report&ddtags=service%3Arubygems.org%2Cversion%3Af48831beb0f323a0a045199ac05407636f8b94d5%2Cenv%3Aproduction%2Ctrace_id%3A69206679000000001769e2e07bd9e5fa'
+      X-Request-Id:
+      - e4149efb-b753-4624-96e9-76ec63c73b45
+      X-Runtime:
+      - '0.014199'
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      X-Backend:
+      - F_Rails 54.214.200.219:443
+      Accept-Ranges:
+      - bytes
+      Age:
+      - '0'
+      Date:
+      - Fri, 21 Nov 2025 13:17:45 GMT
+      Via:
+      - 1.1 varnish
+      X-Served-By:
+      - cache-hel1410023-HEL
+      X-Cache:
+      - MISS
+      X-Cache-Hits:
+      - '0'
+      X-Timer:
+      - S1763731065.863285,VS0,VE696
+      Vary:
+      - Accept-Encoding
+      Etag:
+      - '"b82e7e8dfd994b000b972f331bc5af68"'
+      Server:
+      - RubyGems.org
+    body:
+      encoding: ASCII-8BIT
+      base64_string: |
+        eyJuYW1lIjoiZGV2aXNlIiwiZG93bmxvYWRzIjoyNTY2NDMxMTYsInZlcnNp
+        b24iOiIwLjEuMCIsInZlcnNpb25fY3JlYXRlZF9hdCI6IjIwMDktMTAtMjFU
+        MDU6MzQ6NTAuMDczWiIsInZlcnNpb25fZG93bmxvYWRzIjo1MTY5LCJwbGF0
+        Zm9ybSI6InJ1YnkiLCJhdXRob3JzIjoiSm9zw6kgVmFsaW0sIENhcmxvcyBB
+        bnTDtG5pbyIsImluZm8iOiJGbGV4aWJsZSBhdXRoZW50aWNhdGlvbiBzb2x1
+        dGlvbiBmb3IgUmFpbHMgd2l0aCBXYXJkZW4iLCJsaWNlbnNlcyI6bnVsbCwi
+        bWV0YWRhdGEiOnsid2lraV91cmkiOiIiLCJob21lcGFnZV91cmkiOiJodHRw
+        czovL2dpdGh1Yi5jb20vaGVhcnRjb21iby9kZXZpc2UiLCJidWdfdHJhY2tl
+        cl91cmkiOiIiLCJzb3VyY2VfY29kZV91cmkiOiJodHRwOi8vZ2l0aHViLmNv
+        bS9wbGF0YWZvcm1hdGVjL2RldmlzZSIsIm1haWxpbmdfbGlzdF91cmkiOiJo
+        dHRwOi8vZ3JvdXBzLmdvb2dsZS5jb20vZ3JvdXAvcGxhdGFmb3JtYXRlYy1k
+        ZXZpc2UiLCJkb2N1bWVudGF0aW9uX3VyaSI6Imh0dHA6Ly9naXRodWIuY29t
+        L3BsYXRhZm9ybWF0ZWMvZGV2aXNlIn0sInlhbmtlZCI6ZmFsc2UsInNoYSI6
+        IjhjZmU0OWUyNDQ0ZjczZjI2ZjgwYTBkYjQ4ZjYyZTdjNWY2OTUzZjY5NTEy
+        ZTRkZWE1NWJjMGRlNjE4Yzc1ZTUiLCJzcGVjX3NoYSI6ImJiYzljNjk3NzJi
+        NDA0M2M4ZTkxMmU2NjY3MGZkNDE2MTU4YTMyMDIwYjQ2YjhkZjUwYjk1NWU0
+        ZTQ2MDZmZWIiLCJwcm9qZWN0X3VyaSI6Imh0dHBzOi8vcnVieWdlbXMub3Jn
+        L2dlbXMvZGV2aXNlIiwiZ2VtX3VyaSI6Imh0dHBzOi8vcnVieWdlbXMub3Jn
+        L2dlbXMvZGV2aXNlLTAuMS4wLmdlbSIsImhvbWVwYWdlX3VyaSI6Imh0dHBz
+        Oi8vZ2l0aHViLmNvbS9oZWFydGNvbWJvL2RldmlzZSIsIndpa2lfdXJpIjpu
+        dWxsLCJkb2N1bWVudGF0aW9uX3VyaSI6Imh0dHA6Ly9naXRodWIuY29tL3Bs
+        YXRhZm9ybWF0ZWMvZGV2aXNlIiwibWFpbGluZ19saXN0X3VyaSI6Imh0dHA6
+        Ly9ncm91cHMuZ29vZ2xlLmNvbS9ncm91cC9wbGF0YWZvcm1hdGVjLWRldmlz
+        ZSIsInNvdXJjZV9jb2RlX3VyaSI6Imh0dHA6Ly9naXRodWIuY29tL3BsYXRh
+        Zm9ybWF0ZWMvZGV2aXNlIiwiYnVnX3RyYWNrZXJfdXJpIjpudWxsLCJjaGFu
+        Z2Vsb2dfdXJpIjpudWxsLCJmdW5kaW5nX3VyaSI6bnVsbCwiZGVwZW5kZW5j
+        aWVzIjp7ImRldmVsb3BtZW50IjpbXSwicnVudGltZSI6W3sibmFtZSI6Indh
+        cmRlbiIsInJlcXVpcmVtZW50cyI6In5cdTAwM2UgMC41LjAifV19LCJidWls
+        dF9hdCI6IjIwMDktMTAtMjFUMDU6MDA6MDAuMDAwWiIsImNyZWF0ZWRfYXQi
+        OiIyMDA5LTEwLTIxVDA1OjM0OjUwLjA3M1oiLCJkZXNjcmlwdGlvbiI6IkZs
+        ZXhpYmxlIGF1dGhlbnRpY2F0aW9uIHNvbHV0aW9uIGZvciBSYWlscyB3aXRo
+        IFdhcmRlbiIsImRvd25sb2Fkc19jb3VudCI6NTE2OSwibnVtYmVyIjoiMC4x
+        LjAiLCJzdW1tYXJ5IjoiRmxleGlibGUgYXV0aGVudGljYXRpb24gc29sdXRp
+        b24gZm9yIFJhaWxzIHdpdGggV2FyZGVuIiwicnVieWdlbXNfdmVyc2lvbiI6
+        Ilx1MDAzZT0gMCIsInJ1YnlfdmVyc2lvbiI6bnVsbCwicHJlcmVsZWFzZSI6
+        ZmFsc2UsInJlcXVpcmVtZW50cyI6bnVsbH0=
+  recorded_at: Fri, 21 Nov 2025 13:17:45 GMT
+recorded_with: VCR 6.3.1

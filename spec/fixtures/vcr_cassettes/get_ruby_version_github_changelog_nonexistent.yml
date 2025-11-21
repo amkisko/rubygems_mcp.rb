@@ -1,0 +1,75 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://api.github.com/repos/ruby/ruby/releases/tags/v999_999_999
+    body:
+      encoding: US-ASCII
+      base64_string: ''
+    headers:
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - application/vnd.github+json
+      User-Agent:
+      - rubygems_mcp/0.1.2
+      Host:
+      - api.github.com
+  response:
+    status:
+      code: 404
+      message: Not Found
+    headers:
+      Date:
+      - Fri, 21 Nov 2025 11:58:12 GMT
+      Content-Type:
+      - application/json; charset=utf-8
+      X-Github-Media-Type:
+      - github.v3; format=json
+      X-Github-Api-Version-Selected:
+      - '2022-11-28'
+      Access-Control-Expose-Headers:
+      - ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining,
+        X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes,
+        X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO,
+        X-GitHub-Request-Id, Deprecation, Sunset
+      Access-Control-Allow-Origin:
+      - "*"
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubdomains; preload
+      X-Frame-Options:
+      - deny
+      X-Content-Type-Options:
+      - nosniff
+      X-Xss-Protection:
+      - '0'
+      Referrer-Policy:
+      - origin-when-cross-origin, strict-origin-when-cross-origin
+      Content-Security-Policy:
+      - default-src 'none'
+      Vary:
+      - Accept-Encoding, Accept, X-Requested-With
+      Server:
+      - github.com
+      X-Ratelimit-Limit:
+      - '60'
+      X-Ratelimit-Remaining:
+      - '6'
+      X-Ratelimit-Reset:
+      - '1763726955'
+      X-Ratelimit-Resource:
+      - core
+      X-Ratelimit-Used:
+      - '54'
+      Content-Length:
+      - '133'
+      X-Github-Request-Id:
+      - E3C3:15C688:3132810:2F0AF88:692053D4
+    body:
+      encoding: ASCII-8BIT
+      base64_string: |
+        eyJtZXNzYWdlIjoiTm90IEZvdW5kIiwiZG9jdW1lbnRhdGlvbl91cmwiOiJo
+        dHRwczovL2RvY3MuZ2l0aHViLmNvbS9yZXN0L3JlbGVhc2VzL3JlbGVhc2Vz
+        I2dldC1hLXJlbGVhc2UtYnktdGFnLW5hbWUiLCJzdGF0dXMiOiI0MDQifQ==
+  recorded_at: Fri, 21 Nov 2025 11:58:12 GMT
+recorded_with: VCR 6.3.1

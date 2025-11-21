@@ -4,6 +4,7 @@ require "json"
 require "date"
 
 require_relative "rubygems_mcp/version"
+require_relative "rubygems_mcp/errors"
 require_relative "rubygems_mcp/client"
 # Server is loaded on-demand when running the executable
 # require_relative "rubygems_mcp/server"

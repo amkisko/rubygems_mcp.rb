@@ -17,30 +17,17 @@ module RubygemsMcp
     # Maximum response size (5MB) to protect against crawler protection pages
     MAX_RESPONSE_SIZE = 5 * 1024 * 1024 # 5MB
 
-    # Custom exception for corrupted data
-    class CorruptedDataError < StandardError
-      attr_reader :original_error, :response_size
+    # Validation constants
+    VALID_SORT_ORDERS = %i[version_desc version_asc date_desc date_asc].freeze
+    MAX_LIMIT = 1000 # Reasonable upper bound for pagination
 
-      def initialize(message, original_error: nil, response_size: nil)
-        super(message)
-        @original_error = original_error
-        @response_size = response_size
-      end
-    end
-
-    # Custom exception for response size exceeded
-    class ResponseSizeExceededError < StandardError
-      attr_reader :size, :max_size
-
-      def initialize(size, max_size)
-        @size = size
-        @max_size = max_size
-        super("Response size (#{size} bytes) exceeds maximum allowed size (#{max_size} bytes). This may indicate crawler protection.")
-      end
-    end
     RUBYGEMS_API_BASE = "https://rubygems.org/api/v1"
+    RUBYGEMS_API_V2_BASE = "https://rubygems.org/api/v2"
     RUBY_RELEASES_URL = "https://www.ruby-lang.org/en/downloads/releases/"
     RUBY_BRANCHES_URL = "https://www.ruby-lang.org/en/downloads/branches/"
+    RUBY_ROADMAP_URL = "https://bugs.ruby-lang.org/projects/ruby-master/roadmap"
+    RUBY_BUGS_BASE = "https://bugs.ruby-lang.org"
+    GITHUB_RUBY_REPO = "https://api.github.com/repos/ruby/ruby"
 
     # Simple in-memory cache with TTL
     class Cache
@@ -96,6 +83,8 @@ module RubygemsMcp
     #   ruby_version, rubygems_version, downloads_count, sha, spec_sha, requirements, metadata
     # @return [Array<Hash>] Array of hashes with selected fields
     def get_latest_versions(gem_names, fields: nil)
+      raise ValidationError, "gem_names cannot be empty" if gem_names.nil? || gem_names.empty?
+      gem_names = gem_names.map { |name| validate_gem_name(name) }
       gem_names.map do |name|
         versions = get_gem_versions(name, limit: 1, fields: fields)
         latest = versions.first # Versions are sorted by version number descending
@@ -121,6 +110,11 @@ module RubygemsMcp
     #   ruby_version, rubygems_version, downloads_count, sha, spec_sha, requirements, metadata
     # @return [Array<Hash>] Array of hashes with selected fields
     def get_gem_versions(gem_name, limit: nil, offset: 0, sort: :version_desc, fields: nil)
+      # Validate inputs
+      gem_name = validate_gem_name(gem_name)
+      validate_pagination_params(limit: limit, offset: offset)
+      sort = validate_sort_order(sort)
+
       cache_key = "gem_versions:#{gem_name}"
 
       if @cache_enabled
@@ -140,7 +134,8 @@ module RubygemsMcp
       unless response.is_a?(Array)
         raise CorruptedDataError.new(
           "Invalid JSON structure: expected Array, got #{response.class}",
-          response_size: response.to_s.bytesize
+          response_size: response.to_s.bytesize,
+          uri: uri.to_s
         )
       end
 
@@ -296,6 +291,8 @@ module RubygemsMcp
     # @param sort [Symbol] Sort order: :version_desc (default), :version_asc, :date_desc, :date_asc
     # @return [Array<Hash>] Array of hashes with :version and :release_date
     def get_ruby_versions(limit: nil, offset: 0, sort: :version_desc)
+      validate_pagination_params(limit: limit, offset: offset)
+      sort = validate_sort_order(sort)
       cache_key = "ruby_versions"
 
       if @cache_enabled
@@ -354,6 +351,7 @@ module RubygemsMcp
     # @param version [String] Ruby version (e.g., "3.4.7" or "4.0.0-preview2")
     # @return [Hash] Hash with :version, :release_notes_url, and :content (full content)
     def get_ruby_version_changelog(version)
+      validate_version_string(version)
       # First get the release notes URL for this version
       versions = get_ruby_versions
 
@@ -389,32 +387,46 @@ module RubygemsMcp
 
       uri = URI(release_notes_url)
       response = make_request(uri, parse_html: true)
-      return {version: version, release_notes_url: release_notes_url, content: nil, error: "Failed to fetch release notes"} unless response
 
-      # Extract the main content - Ruby release notes use div#content
-      content = response.css("div#content").first || response.css("div.content, div.entry-content, article, main").first
+      content = nil
+      github_changelog = nil
 
-      if content
-        # Remove navigation and metadata elements
-        content.css("p.post-info, .post-info, nav, .navigation, header, footer, .sidebar").remove
+      if response
+        # Extract the main content - Ruby release notes use div#content
+        content_elem = response.css("div#content").first || response.css("div.content, div.entry-content, article, main").first
 
-        # Get the full text content, preserving structure
-        text = content.text.strip
+        if content_elem
+          # Remove navigation and metadata elements
+          content_elem.css("p.post-info, .post-info, nav, .navigation, header, footer, .sidebar").remove
 
-        # Clean up excessive whitespace but preserve paragraph structure
-        text = text.gsub(/\n{3,}/, "\n\n")
-        text = text.gsub(/[ \t]+/, " ")
+          # Get the full text content, preserving structure
+          content = content_elem.text.strip
 
-        # Remove empty lines at start/end
-        text = text.strip
-      else
-        text = nil
+          # Clean up excessive whitespace but preserve paragraph structure
+          content = content.gsub(/\n{3,}/, "\n\n")
+          content = content.gsub(/[ \t]+/, " ")
+          content = content.strip
+        end
+      end
+
+      # If no content from release notes, try GitHub as fallback
+      if content.nil? || content.empty?
+        begin
+          github_data = get_ruby_version_github_changelog(version)
+          if github_data[:body] && !github_data[:body].empty?
+            github_changelog = github_data[:body]
+            content = github_changelog
+          end
+        rescue
+          # Silently fall through if GitHub fetch fails
+        end
       end
 
       result = {
         version: version,
         release_notes_url: release_notes_url,
-        content: text
+        content: content,
+        github_changelog: github_changelog
       }
 
       # Cache for 24 hours
@@ -423,11 +435,224 @@ module RubygemsMcp
       result
     end
 
+    # Get Ruby roadmap information from bugs.ruby-lang.org
+    #
+    # @return [Hash] Hash with roadmap data:
+    #   - :versions (Array<Hash>) - Array of version information with links
+    #     Each version hash contains: :name, :due_date, :version_url, :issues_count
+    def get_ruby_roadmap
+      cache_key = "ruby_roadmap"
+
+      if @cache_enabled
+        cached = self.class.cache.get(cache_key)
+        return cached if cached
+      end
+
+      uri = URI(RUBY_ROADMAP_URL)
+      response = make_request(uri, parse_html: true)
+      return {versions: []} unless response
+
+      versions = []
+
+      # Find all version links in the roadmap
+      response.css('a[href*="/versions/"]').each do |link|
+        href = link["href"]
+        next unless href&.match?(%r{/versions/\d+})
+
+        version_name = link.text.strip
+        due_date = link["title"]
+        version_url = href.start_with?("http") ? href : "#{RUBY_BUGS_BASE}#{href}"
+
+        # Try to find issue count in nearby elements
+        issues_count = nil
+        parent = link.parent
+        if parent
+          # Look for text like "16 issues" or "87%"
+          issues_text = parent.text
+          issues_match = issues_text.match(/(\d+)\s+issues?/)
+          issues_count = issues_match[1].to_i if issues_match
+        end
+
+        # Avoid duplicates
+        next if versions.any? { |v| v[:name] == version_name }
+
+        versions << {
+          name: version_name,
+          due_date: due_date,
+          version_url: version_url,
+          issues_count: issues_count
+        }
+      end
+
+      result = {versions: versions}
+
+      # Cache for 6 hours (roadmap changes infrequently)
+      self.class.cache.set(cache_key, result, 21600) if @cache_enabled
+
+      result
+    end
+
+    # Get detailed roadmap information for a specific Ruby version from bugs.ruby-lang.org
+    #
+    # @param version [String] Ruby version (e.g., "3.4", "4.0")
+    # @return [Hash] Hash with version details:
+    #   - :version (String) - Version name
+    #   - :version_url (String) - URL to version page
+    #   - :description (String, nil) - Version description
+    #   - :issues (Array<Hash>) - Array of issues/features for this version
+    #     Each issue hash contains: :id, :tracker, :subject, :status, :priority, :url
+    def get_ruby_version_roadmap_details(version)
+      validate_version_string(version)
+
+      # First get roadmap to find version URL
+      roadmap = get_ruby_roadmap
+      version_info = roadmap[:versions].find { |v| v[:name] == version || v[:name].start_with?("#{version}.") }
+
+      return {version: version, version_url: nil, description: nil, issues: [], error: "Version not found in roadmap"} unless version_info
+
+      version_url = version_info[:version_url]
+      cache_key = "ruby_version_roadmap:#{version}"
+
+      if @cache_enabled
+        cached = self.class.cache.get(cache_key)
+        return cached if cached
+      end
+
+      uri = URI(version_url)
+      response = make_request(uri, parse_html: true)
+      return {version: version, version_url: version_url, description: nil, issues: [], error: "Failed to fetch version page"} unless response
+
+      # Extract description
+      description = nil
+      desc_elem = response.css(".wiki, .description, .version-description").first
+      description = desc_elem.text.strip if desc_elem && !desc_elem.text.strip.empty?
+
+      # Extract issues
+      issues = []
+      response.css(".issues tbody tr, .issue-list tr").each do |row|
+        cells = row.css("td")
+        next if cells.empty?
+
+        # Try to extract issue information
+        issue_link = row.css("a[href*='/issues/']").first
+        next unless issue_link
+
+        issue_id = issue_link["href"].match(%r{/issues/(\d+)})&.[](1)
+        next unless issue_id
+
+        issue_url = issue_link["href"].start_with?("http") ? issue_link["href"] : "#{RUBY_BUGS_BASE}#{issue_link["href"]}"
+        subject = issue_link.text.strip
+
+        # Try to extract tracker, status, priority from cells
+        tracker = cells[0]&.text&.strip
+        status = cells[1]&.text&.strip || cells.find { |c| c.text.match?(/New|Assigned|Closed|Resolved/i) }&.text&.strip
+        priority = cells.find { |c| c.text.match?(/Low|Normal|High|Urgent/i) }&.text&.strip
+
+        issues << {
+          id: issue_id,
+          tracker: tracker,
+          subject: subject,
+          status: status,
+          priority: priority,
+          url: issue_url
+        }
+      end
+
+      result = {
+        version: version,
+        version_url: version_url,
+        description: description,
+        issues: issues
+      }
+
+      # Cache for 6 hours
+      self.class.cache.set(cache_key, result, 21600) if @cache_enabled
+
+      result
+    end
+
+    # Get GitHub release changelog for a Ruby version
+    #
+    # @param version [String] Ruby version (e.g., "3.4.7", "3.4.0")
+    # @return [Hash] Hash with release information:
+    #   - :version (String) - Version string
+    #   - :tag_name (String) - GitHub tag name (e.g., "v3_4_7")
+    #   - :name (String, nil) - Release name
+    #   - :body (String, nil) - Release notes/changelog
+    #   - :published_at (String, nil) - Publication date as ISO 8601
+    #   - :url (String, nil) - GitHub release URL
+    def get_ruby_version_github_changelog(version)
+      validate_version_string(version)
+
+      # Convert version to GitHub tag format (3.4.7 -> v3_4_7)
+      tag_name = "v#{version.tr(".", "_")}"
+      cache_key = "ruby_github_changelog:#{version}"
+
+      if @cache_enabled
+        cached = self.class.cache.get(cache_key)
+        return cached if cached
+      end
+
+      # Try GitHub API
+      uri = URI("#{GITHUB_RUBY_REPO}/releases/tags/#{tag_name}")
+      begin
+        http = build_http_client(uri)
+        request = Net::HTTP::Get.new(uri)
+        request["Accept"] = "application/vnd.github+json"
+        request["User-Agent"] = "rubygems_mcp/#{RubygemsMcp::VERSION}"
+
+        response = http.request(request)
+
+        case response
+        when Net::HTTPSuccess
+          # Parse JSON response
+          body = response.body
+          return {version: version, tag_name: tag_name, name: nil, body: nil, published_at: nil, url: nil, error: "Empty response"} if body.nil? || body.empty?
+
+          begin
+            data = JSON.parse(body.force_encoding("UTF-8"))
+          rescue JSON::ParserError => e
+            raise CorruptedDataError.new(
+              "Failed to parse GitHub API response: #{e.message}",
+              original_error: e,
+              uri: uri.to_s
+            )
+          end
+
+          result = {
+            version: version,
+            tag_name: tag_name,
+            name: data["name"],
+            body: data["body"],
+            published_at: data["published_at"],
+            url: data["html_url"]
+          }
+
+          # Cache for 24 hours
+          self.class.cache.set(cache_key, result, 86400) if @cache_enabled
+
+          result
+        when Net::HTTPNotFound
+          {version: version, tag_name: tag_name, name: nil, body: nil, published_at: nil, url: nil, error: "Release not found on GitHub"}
+        else
+          handle_http_error(response, uri)
+        end
+      rescue APIError
+        raise
+      rescue => e
+        raise APIError.new(
+          "Request to GitHub API failed: #{e.class} - #{e.message}",
+          uri: uri.to_s
+        )
+      end
+    end
+
     # Get reverse dependencies (gems that depend on this gem)
     #
     # @param gem_name [String] Gem name
     # @return [Array<String>] Array of gem names that depend on this gem
     def get_gem_reverse_dependencies(gem_name)
+      gem_name = validate_gem_name(gem_name)
       cache_key = "gem_reverse_deps:#{gem_name}"
 
       if @cache_enabled
@@ -452,6 +677,8 @@ module RubygemsMcp
     # @param version [String] Gem version (e.g., "1.0.0")
     # @return [Hash] Hash with :version_downloads and :total_downloads
     def get_gem_version_downloads(gem_name, version)
+      gem_name = validate_gem_name(gem_name)
+      validate_version_string(version)
       cache_key = "gem_downloads:#{gem_name}:#{version}"
 
       if @cache_enabled
@@ -482,6 +709,7 @@ module RubygemsMcp
     # @param limit [Integer, nil] Maximum number of gems to return (default: 30, max: 50)
     # @return [Array<Hash>] Array of gem information
     def get_latest_gems(limit: 30)
+      validate_pagination_params(limit: limit, offset: 0)
       limit = [limit || 30, 50].min # API returns max 50
       cache_key = "latest_gems:#{limit}"
 
@@ -520,6 +748,7 @@ module RubygemsMcp
     # @param limit [Integer, nil] Maximum number of gems to return (default: 30, max: 50)
     # @return [Array<Hash>] Array of gem version information
     def get_recently_updated_gems(limit: 30)
+      validate_pagination_params(limit: limit, offset: 0)
       limit = [limit || 30, 50].min # API returns max 50
       cache_key = "recently_updated_gems:#{limit}"
 
@@ -561,6 +790,8 @@ module RubygemsMcp
     # @param version [String, nil] Gem version (optional, uses latest if not provided)
     # @return [Hash] Hash with :gem_name, :version, :changelog_uri, and :summary
     def get_gem_changelog(gem_name, version: nil)
+      gem_name = validate_gem_name(gem_name)
+      validate_version_string(version) if version
       # Get gem info to find changelog_uri
       gem_info = get_gem_info(gem_name)
       return {gem_name: gem_name, version: nil, changelog_uri: nil, summary: nil, error: "Gem not found"} if gem_info.empty?
@@ -704,6 +935,7 @@ module RubygemsMcp
     #   dependencies, changelog_uri, funding_uri, platform, sha, spec_sha, metadata
     # @return [Hash] Hash with selected gem information
     def get_gem_info(gem_name, fields: nil)
+      gem_name = validate_gem_name(gem_name)
       cache_key = "gem_info:#{gem_name}"
 
       if @cache_enabled
@@ -748,6 +980,82 @@ module RubygemsMcp
       select_fields([gem_info], fields).first || gem_info
     end
 
+    # Get detailed information for a specific gem version
+    #
+    # Uses RubyGems API v2 to get version-specific details including:
+    # - Version-specific download counts
+    # - Version creation date
+    # - Dependencies for that specific version
+    # - SHA checksums
+    # - Built date
+    #
+    # @param gem_name [String] Gem name (e.g., 'devise')
+    # @param version [String] Version string (e.g., '0.1.0', '4.9.4', '1.15.0-x86_64-linux')
+    # @param fields [Array<String>, nil] Optional field selection (GraphQL-like)
+    # @return [Hash] Hash with version-specific gem information
+    # @raise [ValidationError] If gem name or version is invalid
+    # @raise [NotFoundError] If gem or version doesn't exist
+    def get_gem_version_info(gem_name, version, fields: nil)
+      validate_gem_name(gem_name)
+      # Gem versions can include platform suffixes (e.g., "1.15.0-x86_64-linux")
+      # So we use a more lenient validation for gem versions
+      validate_gem_version_string(version)
+
+      cache_key = "gem_version_info:#{gem_name}:#{version}"
+      if @cache_enabled
+        cached = self.class.cache.get(cache_key)
+        if cached
+          return select_fields([cached], fields).first if fields
+          return cached
+        end
+      end
+
+      # Use v2 API for version-specific information
+      uri = URI("#{RUBYGEMS_API_V2_BASE}/rubygems/#{gem_name}/versions/#{version}.json")
+
+      response = make_request(uri)
+      return {} unless response.is_a?(Hash)
+
+      version_info = {
+        name: response["name"],
+        version: response["version"] || response["number"],
+        summary: response["summary"] || response["info"],
+        description: response["description"],
+        homepage: response["homepage_uri"],
+        source_code: response["source_code_uri"],
+        documentation: response["documentation_uri"],
+        licenses: response["licenses"] || [],
+        authors: response["authors"],
+        info: response["info"],
+        downloads: response["downloads"], # Total downloads for the gem
+        version_downloads: response["version_downloads"] || response["downloads_count"],
+        yanked: response["yanked"] || false,
+        dependencies: response["dependencies"] || {runtime: [], development: []},
+        changelog_uri: response["changelog_uri"] || response.dig("metadata", "changelog_uri"),
+        funding_uri: response["funding_uri"] || response.dig("metadata", "funding_uri"),
+        platform: response["platform"] || "ruby",
+        sha: response["sha"],
+        spec_sha: response["spec_sha"],
+        metadata: response["metadata"] || {},
+        version_created_at: response["version_created_at"] || response["created_at"],
+        built_at: response["built_at"],
+        prerelease: response["prerelease"] || false,
+        rubygems_version: response["rubygems_version"],
+        ruby_version: response["ruby_version"],
+        requirements: response["requirements"],
+        gem_uri: response["gem_uri"],
+        project_uri: response["project_uri"],
+        wiki_uri: response["wiki_uri"],
+        mailing_list_uri: response["mailing_list_uri"],
+        bug_tracker_uri: response["bug_tracker_uri"]
+      }
+
+      # Cache for 1 hour
+      self.class.cache.set(cache_key, version_info, 3600) if @cache_enabled
+
+      select_fields([version_info], fields).first || version_info
+    end
+
     # Search for gems by name
     #
     # @param query [String] Search query
@@ -755,6 +1063,8 @@ module RubygemsMcp
     # @param offset [Integer] Number of results to skip (for pagination)
     # @return [Array<Hash>] Array of hashes with gem information
     def search_gems(query, limit: nil, offset: 0)
+      raise ValidationError, "Search query cannot be empty" if query.nil? || query.strip.empty?
+      validate_pagination_params(limit: limit, offset: offset)
       # Don't cache search results as they can change frequently
       uri = URI("#{RUBYGEMS_API_BASE}/search.json")
       uri.query = URI.encode_www_form(query: query)
@@ -777,6 +1087,126 @@ module RubygemsMcp
       results = results[offset..] if offset > 0
       results = results.first(limit) if limit
       results
+    end
+
+    # Validate gem name
+    #
+    # @param gem_name [String] Gem name to validate
+    # @return [String] Validated and normalized gem name
+    # @raise [ValidationError] If gem name is invalid
+    def validate_gem_name(gem_name)
+      raise ValidationError, "Gem name cannot be empty" if gem_name.nil? || gem_name.strip.empty?
+      raise ValidationError, "Gem name contains invalid characters" unless gem_name.match?(/\A[a-z0-9_-]+\z/i)
+      gem_name.strip
+    end
+
+    # Validate version string (for Ruby versions)
+    #
+    # @param version [String, nil] Version string to validate
+    # @return [String, nil] Validated version string or nil
+    # @raise [ValidationError] If version format is invalid
+    def validate_version_string(version)
+      return nil if version.nil?
+      # Ruby versions can be: "3.4.7", "4.0.0-preview2", "4.0.0.pre.preview2", etc.
+      # Use Gem::Version to validate as it handles all Ruby version formats
+      begin
+        Gem::Version.new(version)
+      rescue ArgumentError
+        raise ValidationError, "Invalid version format: #{version.inspect}"
+      end
+      version
+    end
+
+    # Validate gem version string (more lenient, supports platform suffixes)
+    #
+    # @param version [String, nil] Version string to validate
+    # @return [String, nil] Validated version string or nil
+    # @raise [ValidationError] If version format is invalid
+    def validate_gem_version_string(version)
+      return nil if version.nil?
+      raise ValidationError, "Version cannot be empty" if version.strip.empty?
+
+      # Gem versions can include platform suffixes like "1.15.0-x86_64-linux"
+      # Try to validate the base version part (before any platform suffix)
+      base_version = version.split(/[-+]/).first
+      begin
+        Gem::Version.new(base_version)
+      rescue ArgumentError
+        raise ValidationError, "Invalid version format: #{version.inspect}"
+      end
+      version
+    end
+
+    # Validate sort order
+    #
+    # @param sort [Symbol, String] Sort order to validate
+    # @return [Symbol] Validated sort order symbol
+    # @raise [ValidationError] If sort order is invalid
+    def validate_sort_order(sort)
+      sort_sym = sort.to_sym
+      unless VALID_SORT_ORDERS.include?(sort_sym)
+        raise ValidationError, "Invalid sort order. Must be one of: #{VALID_SORT_ORDERS.join(", ")}"
+      end
+      sort_sym
+    end
+
+    # Validate pagination parameters
+    #
+    # @param limit [Integer, nil] Limit value
+    # @param offset [Integer] Offset value
+    # @raise [ValidationError] If pagination parameters are invalid
+    def validate_pagination_params(limit:, offset:)
+      raise ValidationError, "Limit must be positive" if limit && limit < 0
+      raise ValidationError, "Offset must be non-negative" if offset < 0
+      raise ValidationError, "Limit cannot exceed #{MAX_LIMIT}" if limit && limit > MAX_LIMIT
+    end
+
+    # Handle HTTP errors and raise appropriate exception types
+    #
+    # @param response [Net::HTTPResponse] HTTP response
+    # @param uri [URI] Request URI for context
+    # @raise [NotFoundError, ServerError, ClientError, APIError] Based on HTTP status code
+    def handle_http_error(response, uri)
+      # Try to parse error response body
+      error_data = begin
+        JSON.parse(response.body) if response.body && !response.body.empty?
+      rescue JSON::ParserError
+        nil
+      end
+
+      error_message = error_data&.dig("error") || error_data&.dig("message") || response.message
+      error_message = "#{response.code} #{error_message}"
+
+      case response
+      when Net::HTTPNotFound
+        raise NotFoundError.new(
+          "Resource not found: #{uri}",
+          status_code: response.code.to_i,
+          response_data: error_data,
+          uri: uri.to_s
+        )
+      when Net::HTTPServerError
+        raise ServerError.new(
+          error_message,
+          status_code: response.code.to_i,
+          response_data: error_data,
+          uri: uri.to_s
+        )
+      when Net::HTTPClientError
+        raise ClientError.new(
+          error_message,
+          status_code: response.code.to_i,
+          response_data: error_data,
+          uri: uri.to_s
+        )
+      else
+        raise APIError.new(
+          error_message,
+          status_code: response.code.to_i,
+          response_data: error_data,
+          uri: uri.to_s
+        )
+      end
     end
 
     private
@@ -865,7 +1295,7 @@ module RubygemsMcp
         response_body = response.body || ""
         response_size = response_body.bytesize
         if response_size > MAX_RESPONSE_SIZE
-          raise ResponseSizeExceededError.new(response_size, MAX_RESPONSE_SIZE)
+          raise ResponseSizeExceededError.new(response_size, MAX_RESPONSE_SIZE, uri: uri.to_s)
         end
 
         # Validate and parse response
@@ -874,18 +1304,25 @@ module RubygemsMcp
         else
           validate_and_parse_json(response_body, uri)
         end
-      when Net::HTTPNotFound
-        raise "Resource not found. Response: #{response.body[0..500]}"
       else
-        raise "API request failed: #{response.code} #{response.message}\n#{response.body[0..500]}"
+        handle_http_error(response, uri)
       end
     rescue ResponseSizeExceededError, CorruptedDataError
       # Re-raise our custom errors as-is (don't cache corrupted data)
       raise
     rescue OpenSSL::SSL::SSLError => e
-      raise "SSL verification failed: #{e.message}. This may be due to system certificate configuration issues."
+      raise APIError.new(
+        "SSL verification failed: #{e.message}. This may be due to system certificate configuration issues.",
+        uri: uri.to_s
+      )
+    rescue APIError, NotFoundError, ServerError, ClientError
+      # Re-raise API errors as-is
+      raise
     rescue => e
-      raise "Request failed: #{e.class} - #{e.message}"
+      raise APIError.new(
+        "Request to #{uri} failed: #{e.class} - #{e.message}",
+        uri: uri.to_s
+      )
     end
 
     # Validate and parse JSON response
@@ -899,7 +1336,8 @@ module RubygemsMcp
       if body.strip.start_with?("<") && body.match?(/cloudflare|ddos protection|access denied|blocked|captcha/i)
         raise CorruptedDataError.new(
           "Response appears to be a crawler protection page from #{uri}",
-          response_size: body.bytesize
+          response_size: body.bytesize,
+          uri: uri.to_s
         )
       end
 
@@ -910,7 +1348,8 @@ module RubygemsMcp
         unless parsed.is_a?(Hash) || parsed.is_a?(Array)
           raise CorruptedDataError.new(
             "Invalid JSON structure: expected Hash or Array, got #{parsed.class}",
-            response_size: body.bytesize
+            response_size: body.bytesize,
+            uri: uri.to_s
           )
         end
 
@@ -921,14 +1360,16 @@ module RubygemsMcp
           raise CorruptedDataError.new(
             "Received HTML instead of JSON from #{uri}. This may indicate an error page or crawler protection.",
             original_error: e,
-            response_size: body.bytesize
+            response_size: body.bytesize,
+            uri: uri.to_s
           )
         end
 
         raise CorruptedDataError.new(
           "Failed to parse JSON response from #{uri}: #{e.message}",
           original_error: e,
-          response_size: body.bytesize
+          response_size: body.bytesize,
+          uri: uri.to_s
         )
       end
     end
@@ -943,7 +1384,8 @@ module RubygemsMcp
       if body.match?(/cloudflare|ddos protection|access denied|blocked|captcha|rate limit/i)
         raise CorruptedDataError.new(
           "Response appears to be a crawler protection page from #{uri}",
-          response_size: body.bytesize
+          response_size: body.bytesize,
+          uri: uri.to_s
         )
       end
 
@@ -951,7 +1393,8 @@ module RubygemsMcp
       unless body.strip.start_with?("<!DOCTYPE", "<html", "<HTML") || body.include?("<html")
         raise CorruptedDataError.new(
           "Response from #{uri} does not appear to be HTML",
-          response_size: body.bytesize
+          response_size: body.bytesize,
+          uri: uri.to_s
         )
       end
 
@@ -962,7 +1405,8 @@ module RubygemsMcp
         if doc.text.strip.length < 50
           raise CorruptedDataError.new(
             "HTML response from #{uri} appears to be empty or too short",
-            response_size: body.bytesize
+            response_size: body.bytesize,
+            uri: uri.to_s
           )
         end
 
@@ -978,7 +1422,8 @@ module RubygemsMcp
         if error_indicators.any? { |pattern| doc.text.match?(pattern) }
           raise CorruptedDataError.new(
             "HTML response from #{uri} appears to be an error page",
-            response_size: body.bytesize
+            response_size: body.bytesize,
+            uri: uri.to_s
           )
         end
 
@@ -987,7 +1432,8 @@ module RubygemsMcp
         raise CorruptedDataError.new(
           "Failed to parse HTML from #{uri}: #{e.message}",
           original_error: e,
-          response_size: body.bytesize
+          response_size: body.bytesize,
+          uri: uri.to_s
         )
       end
     end
