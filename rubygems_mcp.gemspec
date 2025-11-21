@@ -33,7 +33,7 @@ Gem::Specification.new do |spec|
     "rubygems_mfa_required" => "true"
   }
 
-  spec.add_runtime_dependency "fast-mcp", "~> 0.1"
+  spec.add_runtime_dependency "fast-mcp", ">= 0.1", "< 2.0"
   spec.add_runtime_dependency "nokogiri", "~> 1.15"
   spec.add_runtime_dependency "rack", "~> 3.0"
   # base64 was removed from default gems in Ruby 3.4+, but fast-mcp requires it
