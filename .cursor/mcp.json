@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "rubygems": {
+    "rubygems-dev": {
       "command": "bundle",
       "args": ["exec", "rubygems_mcp"]
     }
