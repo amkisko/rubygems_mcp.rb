@@ -53,7 +53,11 @@ For Claude Desktop, edit the MCP configuration file:
 {
   "mcpServers": {
     "rubygems": {
-      "command": "rubygems_mcp"
+      "command": "gem",
+      "args": ["exec", "rubygems_mcp"],
+      "env": {
+        "RUBY_VERSION": "3.4.7"
+      }
     }
   }
 }
