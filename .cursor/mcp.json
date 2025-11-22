@@ -1,8 +1,11 @@
 {
   "mcpServers": {
     "rubygems-dev": {
-      "command": "bundle",
-      "args": ["exec", "rubygems_mcp"]
+      "command": "gem",
+      "args": ["exec", "rubygems_mcp"],
+      "env": {
+        "RUBY_VERSION": "3.4.7"
+      }
     }
   }
 }

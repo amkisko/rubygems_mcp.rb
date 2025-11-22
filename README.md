@@ -30,11 +30,17 @@ For Cursor IDE, create or update `.cursor/mcp.json` in your project:
 {
   "mcpServers": {
     "rubygems": {
-      "command": "rubygems_mcp"
+      "command": "gem",
+      "args": ["exec", "rubygems_mcp"],
+      "env": {
+        "RUBY_VERSION": "3.4.7"
+      }
     }
   }
 }
 ```
+
+**Note**: Using `gem exec` ensures the correct Ruby version is used. If you're using a Ruby version manager like [mise](https://mise.jdx.dev/) or [rbenv](https://github.com/rbenv/rbenv), set the `RUBY_VERSION` environment variable to match your desired Ruby version. The `gem exec` command will automatically use the correct Ruby version based on your version manager configuration.
 
 ### Claude Desktop Configuration
 
