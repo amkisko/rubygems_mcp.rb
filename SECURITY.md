@@ -1,14 +1,5 @@
 # Security Policy
 
-## Supported Versions
-
-We actively support the following versions of `rubygems_mcp` with security updates:
-
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
-| < 0.1   | :x:                |
-
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability in `rubygems_mcp`, please report it responsibly.
@@ -79,7 +70,7 @@ bundle update
 
 ## Security Updates
 
-Security updates will be released as patch versions (e.g., 0.1.0 → 0.1.1) for supported versions.
+Security updates will be released as patch for the latest version.
 
 For critical security vulnerabilities, we may release a security advisory and recommend immediate upgrade.
 
@@ -88,6 +79,12 @@ For critical security vulnerabilities, we may release a security advisory and re
 - [RubyGems Security](https://guides.rubygems.org/security/)
 - [Ruby Security Guide](https://www.ruby-lang.org/en/documentation/security/)
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+
+## Automation Security
+
+* **Context Isolation:** It is strictly forbidden to include production credentials, API keys, or Personally Identifiable Information (PII) in prompts sent to third-party LLMs or automation services.
+
+* **Supply Chain:** All automated dependencies must be verified.
 
 ## Contact
 
