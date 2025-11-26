@@ -520,5 +520,4 @@ RSpec.describe RubygemsMcp::Server do
       expect(logger.level).to eq(:info)
     end
   end
-
 end

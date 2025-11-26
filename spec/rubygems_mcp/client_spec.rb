@@ -2562,7 +2562,7 @@ RSpec.describe RubygemsMcp::Client do
         # Mock Gem::Version.new to raise ArgumentError during normalization (line 361)
         # This tests the rescue block at line 363
         allow(Gem::Version).to receive(:new).with("3.4.7").and_raise(ArgumentError.new("Malformed version"))
-        
+
         result = client.get_ruby_version_changelog("3.4.7")
         # Should still work because ArgumentError is rescued and original version is used (line 363)
         expect(result).to have_key(:version)
