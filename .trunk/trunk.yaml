@@ -40,7 +40,7 @@ lint:
     - stylelint
     - biome
   ignore:
-    - linters: [standardrb]
+    - linters: [standardrb, yamllint]
       paths:
         - bin/**
         - vendor/**
@@ -48,6 +48,7 @@ lint:
         - coverage/**
         - gemfiles/**
         - usr/**
+        - spec/fixtures/**
   enabled:
     - standardrb
     - yamllint@1.37.1
