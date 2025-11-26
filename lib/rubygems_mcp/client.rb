@@ -23,6 +23,7 @@ module RubygemsMcp
 
     RUBYGEMS_API_BASE = "https://rubygems.org/api/v1"
     RUBYGEMS_API_V2_BASE = "https://rubygems.org/api/v2"
+    RUBYGEMS_BASE = "https://rubygems.org"
     RUBY_RELEASES_URL = "https://www.ruby-lang.org/en/downloads/releases/"
     RUBY_BRANCHES_URL = "https://www.ruby-lang.org/en/downloads/branches/"
     RUBY_ROADMAP_URL = "https://bugs.ruby-lang.org/projects/ruby-master/roadmap"
@@ -1061,9 +1062,17 @@ module RubygemsMcp
     # @param query [String] Search query
     # @param limit [Integer, nil] Maximum number of results to return (nil = all)
     # @param offset [Integer] Number of results to skip (for pagination)
+    # @param page [Integer, nil] Page number (1-based). If provided, overrides offset (page 1 = offset 0, page 2 = offset 30, etc.)
     # @return [Array<Hash>] Array of hashes with gem information
-    def search_gems(query, limit: nil, offset: 0)
+    def search_gems(query, limit: nil, offset: 0, page: nil)
       raise ValidationError, "Search query cannot be empty" if query.nil? || query.strip.empty?
+
+      # Convert page to offset if provided (assuming 30 items per page, which is RubyGems default)
+      if page
+        raise ValidationError, "Page must be positive" if page < 1
+        offset = (page - 1) * 30
+      end
+
       validate_pagination_params(limit: limit, offset: offset)
       # Don't cache search results as they can change frequently
       uri = URI("#{RUBYGEMS_API_BASE}/search.json")
@@ -1087,6 +1096,149 @@ module RubygemsMcp
       results = results[offset..] if offset > 0
       results = results.first(limit) if limit
       results
+    end
+
+    # Get news releases (all new gem releases) with pagination
+    #
+    # @param page [Integer] Page number (1-based, default: 1)
+    # @return [Array<Hash>] Array of hashes with gem release information
+    def get_news_releases(page: 1)
+      raise ValidationError, "Page must be positive" if page < 1
+      cache_key = "news_releases:#{page}"
+
+      if @cache_enabled
+        cached = self.class.cache.get(cache_key)
+        return cached if cached
+      end
+
+      uri = URI("#{RUBYGEMS_BASE}/news")
+      uri.query = URI.encode_www_form(page: page) if page > 1
+
+      response = make_request(uri, parse_html: true)
+      return [] unless response
+
+      releases = []
+      # RubyGems news page structure: each gem release is in a list item or similar structure
+      # Look for gem links and extract information
+      response.css("a[href^='/gems/']").each do |link|
+        gem_name = link["href"].match(%r{/gems/([^/]+)})&.[](1)
+        next unless gem_name
+
+        # Find the parent container to extract version and date
+        container = link.ancestors.find { |e| e.name == "li" || e.name == "div" || e.name == "article" }
+        next unless container
+
+        # Extract version from link text or nearby text
+        version_match = link.text.match(/v?(\d+\.\d+\.\d+)/)
+        version = version_match ? version_match[1] : nil
+
+        # Extract date (look for date patterns in nearby text)
+        date_text = container.text
+        date_match = date_text.match(/(\w+ \d{1,2}, \d{4})|(\d{4}-\d{2}-\d{2})/)
+        release_date = if date_match
+          begin
+            Date.parse(date_match[0]).iso8601
+          rescue Date::Error
+            nil
+          end
+        end
+
+        # Extract downloads count if available
+        downloads_match = container.text.match(/([\d,]+)\s*Downloads?/i)
+        downloads = downloads_match ? downloads_match[1].delete(",").to_i : nil
+
+        # Extract description/info
+        info_elem = container.css("p, .info, .description").first
+        info = info_elem&.text&.strip
+
+        # Avoid duplicates
+        next if releases.any? { |r| r[:name] == gem_name && r[:version] == version }
+
+        releases << {
+          name: gem_name,
+          version: version,
+          release_date: release_date,
+          downloads: downloads,
+          info: info,
+          gem_url: "#{RUBYGEMS_BASE}/gems/#{gem_name}"
+        }
+      end
+
+      # Cache for 15 minutes (news changes frequently)
+      self.class.cache.set(cache_key, releases, 900) if @cache_enabled
+
+      releases
+    end
+
+    # Get popular releases (popular new gem releases) with pagination
+    #
+    # @param page [Integer] Page number (1-based, default: 1)
+    # @return [Array<Hash>] Array of hashes with popular gem release information
+    def get_popular_releases(page: 1)
+      raise ValidationError, "Page must be positive" if page < 1
+      cache_key = "popular_releases:#{page}"
+
+      if @cache_enabled
+        cached = self.class.cache.get(cache_key)
+        return cached if cached
+      end
+
+      uri = URI("#{RUBYGEMS_BASE}/releases/popular")
+      uri.query = URI.encode_www_form(page: page) if page > 1
+
+      response = make_request(uri, parse_html: true)
+      return [] unless response
+
+      releases = []
+      # RubyGems popular releases page structure: similar to news page
+      response.css("a[href^='/gems/']").each do |link|
+        gem_name = link["href"].match(%r{/gems/([^/]+)})&.[](1)
+        next unless gem_name
+
+        # Find the parent container to extract version and date
+        container = link.ancestors.find { |e| e.name == "li" || e.name == "div" || e.name == "article" }
+        next unless container
+
+        # Extract version from link text or nearby text
+        version_match = link.text.match(/v?(\d+\.\d+\.\d+)/)
+        version = version_match ? version_match[1] : nil
+
+        # Extract date (look for date patterns in nearby text)
+        date_text = container.text
+        date_match = date_text.match(/(\w+ \d{1,2}, \d{4})|(\d{4}-\d{2}-\d{2})/)
+        release_date = if date_match
+          begin
+            Date.parse(date_match[0]).iso8601
+          rescue Date::Error
+            nil
+          end
+        end
+
+        # Extract downloads count if available
+        downloads_match = container.text.match(/([\d,]+)\s*Downloads?/i)
+        downloads = downloads_match ? downloads_match[1].delete(",").to_i : nil
+
+        # Extract description/info
+        info_elem = container.css("p, .info, .description").first
+        info = info_elem&.text&.strip
+
+        # Avoid duplicates
+        next if releases.any? { |r| r[:name] == gem_name && r[:version] == version }
+
+        releases << {
+          name: gem_name,
+          version: version,
+          release_date: release_date,
+          downloads: downloads,
+          info: info,
+          gem_url: "#{RUBYGEMS_BASE}/gems/#{gem_name}"
+        }
+      end
+
+      # Cache for 15 minutes (popular releases change frequently)
+      self.class.cache.set(cache_key, releases, 900) if @cache_enabled
+
+      releases
     end
 
     # Validate gem name

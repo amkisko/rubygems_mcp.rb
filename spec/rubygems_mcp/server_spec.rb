@@ -8,6 +8,26 @@ RSpec.describe RubygemsMcp::Server do
       # Just verify the method exists and can be called
       expect(described_class).to respond_to(:start)
     end
+
+    it "creates server with correct parameters" do
+      # Test that start method creates server (line 104)
+      server_double = instance_double(FastMcp::Server)
+      allow(FastMcp::Server).to receive(:new).and_return(server_double)
+      allow(server_double).to receive(:start)
+      allow(described_class).to receive(:register_tools)
+      allow(described_class).to receive(:register_resources)
+
+      described_class.start
+
+      expect(FastMcp::Server).to have_received(:new).with(
+        name: "rubygems",
+        version: RubygemsMcp::VERSION,
+        logger: an_instance_of(RubygemsMcp::Server::NullLogger)
+      )
+      expect(described_class).to have_received(:register_tools).with(server_double)
+      expect(described_class).to have_received(:register_resources).with(server_double)
+      expect(server_double).to have_received(:start)
+    end
   end
 
   describe ".register_tools" do
@@ -15,7 +35,7 @@ RSpec.describe RubygemsMcp::Server do
       server = FastMcp::Server.new(name: "test", version: "1.0", logger: RubygemsMcp::Server::NullLogger.new)
       described_class.register_tools(server)
 
-      expect(server.tools.length).to eq(16)
+      expect(server.tools.length).to eq(18)
       # Tools are stored with user-friendly snake_case names
       tool_names = server.tools.keys.map(&:to_s)
       expect(tool_names).to include(
@@ -34,7 +54,9 @@ RSpec.describe RubygemsMcp::Server do
         "get_ruby_roadmap",
         "get_ruby_version_roadmap_details",
         "get_ruby_version_github_changelog",
-        "get_gem_version_info"
+        "get_gem_version_info",
+        "get_news_releases",
+        "get_popular_releases"
       )
     end
   end
@@ -124,6 +146,16 @@ RSpec.describe RubygemsMcp::Server do
         expect(result[:content]).to eq([])
       end
 
+      it "handles non-empty string content" do
+        tool = RubygemsMcp::Server::GetRubyVersionChangelogTool.new
+        client = RubygemsMcp::Client.new
+        allow(tool).to receive(:get_client).and_return(client)
+        allow(client).to receive(:get_ruby_version_changelog).and_return({content: "Release notes content"})
+
+        result = tool.call(version: "3.4.7")
+        expect(result[:content]).to eq([{type: "text", text: "Release notes content"}])
+      end
+
       it "handles array content with string items" do
         tool = RubygemsMcp::Server::GetRubyVersionChangelogTool.new
         client = RubygemsMcp::Client.new
@@ -166,8 +198,21 @@ RSpec.describe RubygemsMcp::Server do
         allow(client).to receive(:get_gem_versions).and_return([])
 
         result = tool.call(gem_name: "rails", sort: "invalid_sort")
-        # Should default to :version_desc (line 193)
+        # Should default to :version_desc (line 196)
         expect(result).to be_an(Array)
+      end
+
+      it "handles valid sort orders" do
+        tool = RubygemsMcp::Server::GetGemVersionsTool.new
+        client = RubygemsMcp::Client.new
+        allow(tool).to receive(:get_client).and_return(client)
+        allow(client).to receive(:get_gem_versions).and_return([])
+
+        # Test all valid sort orders to cover line 194
+        %w[version_desc version_asc date_desc date_asc].each do |sort|
+          result = tool.call(gem_name: "rails", sort: sort)
+          expect(result).to be_an(Array)
+        end
       end
     end
 
@@ -179,72 +224,61 @@ RSpec.describe RubygemsMcp::Server do
         allow(client).to receive(:get_ruby_versions).and_return([])
 
         result = tool.call(sort: "invalid_sort")
-        # Should default to :version_desc (line 230)
+        # Should default to :version_desc (line 233)
         expect(result).to be_an(Array)
+      end
+
+      it "handles valid sort orders" do
+        tool = RubygemsMcp::Server::GetRubyVersionsTool.new
+        client = RubygemsMcp::Client.new
+        allow(tool).to receive(:get_client).and_return(client)
+        allow(client).to receive(:get_ruby_versions).and_return([])
+
+        # Test all valid sort orders to cover line 231
+        %w[version_desc version_asc date_desc date_asc].each do |sort|
+          result = tool.call(sort: sort)
+          expect(result).to be_an(Array)
+        end
       end
     end
 
     describe "PopularGemsResource" do
-      it "handles ResponseSizeExceededError" do
+      it "fetches popular gems from real API", :vcr do
+        VCR.use_cassette("popular_gems_resource") do
+          resource = RubygemsMcp::Server::PopularGemsResource.new
+          content = resource.content
+          expect(content).to be_a(String)
+          parsed = JSON.parse(content)
+          expect(parsed).to be_a(Hash)
+          expect(parsed["gems"]).to be_an(Array)
+          expect(parsed["source"]).to eq("rubygems.org/releases/popular")
+        end
+      end
+
+      it "handles errors when fetching popular releases" do
         resource = RubygemsMcp::Server::PopularGemsResource.new
 
-        # Create a mock client that raises error for first gem
+        # Create a mock client that raises error on first page
         mock_client = instance_double(RubygemsMcp::Client)
-        call_count = 0
-        allow(mock_client).to receive(:get_gem_versions) do |gem_name, **kwargs|
-          call_count += 1
-          if call_count == 1
-            raise RubygemsMcp::ResponseSizeExceededError.new(6000000, 5000000, uri: "https://example.com")
-          else
-            [{version: "1.0.0", release_date: "2020-01-01", name: gem_name}]
-          end
-        end
+        allow(mock_client).to receive(:get_popular_releases).and_raise(RubygemsMcp::APIError.new("API error", uri: "https://example.com"))
 
         # Replace the Client.new call in the resource
         allow(RubygemsMcp::Client).to receive(:new).and_return(mock_client)
 
         content = resource.content
         expect(content).to be_a(String)
-        # Should include error information (line 443)
         parsed = JSON.parse(content)
-        expect(parsed).to be_an(Array)
-        error_gem = parsed.find { |g| g["name"] == "rails" }
-        expect(error_gem["error"]).to be_present if error_gem
+        expect(parsed).to be_a(Hash)
+        expect(parsed["gems"]).to be_an(Array)
+        expect(parsed["total_gems"]).to eq(0)
       end
 
-      it "handles CorruptedDataError" do
-        resource = RubygemsMcp::Server::PopularGemsResource.new
-
-        # Create a mock client that raises error for first gem
-        mock_client = instance_double(RubygemsMcp::Client)
-        call_count = 0
-        allow(mock_client).to receive(:get_gem_versions) do |gem_name, **kwargs|
-          call_count += 1
-          if call_count == 1
-            raise RubygemsMcp::CorruptedDataError.new("Corrupted data", uri: "https://example.com")
-          else
-            [{version: "1.0.0", release_date: "2020-01-01", name: gem_name}]
-          end
-        end
-
-        # Replace the Client.new call in the resource
-        allow(RubygemsMcp::Client).to receive(:new).and_return(mock_client)
-
-        content = resource.content
-        expect(content).to be_a(String)
-        # Should include error information (line 443)
-        parsed = JSON.parse(content)
-        expect(parsed).to be_an(Array)
-        error_gem = parsed.find { |g| g["name"] == "rails" }
-        expect(error_gem["error"]).to be_present if error_gem
-      end
-
-      it "handles gems with no versions" do
+      it "handles empty popular releases" do
         resource = RubygemsMcp::Server::PopularGemsResource.new
 
         # Create a mock client that returns empty array
         mock_client = instance_double(RubygemsMcp::Client)
-        allow(mock_client).to receive(:get_gem_versions).and_return([])
+        allow(mock_client).to receive(:get_popular_releases).and_return([])
 
         # Replace the Client.new call in the resource
         allow(RubygemsMcp::Client).to receive(:new).and_return(mock_client)
@@ -252,9 +286,37 @@ RSpec.describe RubygemsMcp::Server do
         content = resource.content
         expect(content).to be_a(String)
         parsed = JSON.parse(content)
-        expect(parsed).to be_an(Array)
-        # Gems with nil versions should be filtered out (line 447)
-        expect(parsed.all? { |g| g["version"] }).to be true
+        expect(parsed).to be_a(Hash)
+        expect(parsed["gems"]).to be_an(Array)
+        expect(parsed["total_gems"]).to eq(0)
+      end
+
+      it "returns popular gems sorted by downloads" do
+        resource = RubygemsMcp::Server::PopularGemsResource.new
+
+        # Create a mock client that returns sample releases
+        mock_client = instance_double(RubygemsMcp::Client)
+        sample_releases = [
+          {name: "gem1", version: "1.0.0", downloads: 1000, release_date: "2024-01-01", info: "Info 1", gem_url: "https://rubygems.org/gems/gem1"},
+          {name: "gem2", version: "2.0.0", downloads: 5000, release_date: "2024-01-02", info: "Info 2", gem_url: "https://rubygems.org/gems/gem2"},
+          {name: "gem3", version: "3.0.0", downloads: 2000, release_date: "2024-01-03", info: "Info 3", gem_url: "https://rubygems.org/gems/gem3"}
+        ]
+        allow(mock_client).to receive(:get_popular_releases).with(page: 1).and_return(sample_releases)
+        allow(mock_client).to receive(:get_popular_releases).with(page: 2).and_return([])
+        allow(mock_client).to receive(:get_popular_releases).with(page: 3).and_return([])
+
+        # Replace the Client.new call in the resource
+        allow(RubygemsMcp::Client).to receive(:new).and_return(mock_client)
+
+        content = resource.content
+        expect(content).to be_a(String)
+        parsed = JSON.parse(content)
+        expect(parsed).to be_a(Hash)
+        expect(parsed["gems"]).to be_an(Array)
+        expect(parsed["gems"].length).to eq(3)
+        # Should be sorted by downloads descending
+        expect(parsed["gems"].first["downloads"]).to eq(5000)
+        expect(parsed["gems"].last["downloads"]).to eq(1000)
       end
     end
   end
@@ -350,6 +412,22 @@ RSpec.describe RubygemsMcp::Server do
       expect(result).to be_an(Array)
     end
 
+    it "calls get_client for GetNewsReleasesTool", :vcr do
+      VCR.use_cassette("get_news_releases") do
+        tool = RubygemsMcp::Server::GetNewsReleasesTool.new
+        result = tool.call(page: 1)
+        expect(result).to be_an(Array)
+      end
+    end
+
+    it "calls get_client for GetPopularReleasesTool", :vcr do
+      VCR.use_cassette("get_popular_releases") do
+        tool = RubygemsMcp::Server::GetPopularReleasesTool.new
+        result = tool.call(page: 1)
+        expect(result).to be_an(Array)
+      end
+    end
+
     it "calls get_client for GetRubyRoadmapTool" do
       tool = RubygemsMcp::Server::GetRubyRoadmapTool.new
       client = RubygemsMcp::Client.new
@@ -378,6 +456,17 @@ RSpec.describe RubygemsMcp::Server do
 
       result = tool.call(version: "3.4.7")
       expect(result[:body]).to eq("changelog")
+    end
+
+    it "calls get_client for GetGemVersionInfoTool" do
+      tool = RubygemsMcp::Server::GetGemVersionInfoTool.new
+      client = RubygemsMcp::Client.new
+      allow(tool).to receive(:get_client).and_return(client)
+      allow(client).to receive(:get_gem_version_info).and_return({name: "rails", version: "7.1.0"})
+
+      result = tool.call(gem_name: "rails", version: "7.1.0")
+      expect(result[:name]).to eq("rails")
+      expect(result[:version]).to eq("7.1.0")
     end
   end
 
@@ -431,4 +520,5 @@ RSpec.describe RubygemsMcp::Server do
       expect(logger.level).to eq(:info)
     end
   end
+
 end

@@ -138,6 +138,155 @@ RSpec.describe RubygemsMcp::Client do
         expect(results.length).to eq(1)
       end
     end
+
+    it "supports page parameter", :vcr do
+      VCR.use_cassette("search_gems_rails_page") do
+        results_page1 = client.search_gems("rails", page: 1, limit: 30)
+        expect(results_page1).to be_an(Array)
+      end
+      VCR.use_cassette("search_gems_rails_page2") do
+        results_page2 = client.search_gems("rails", page: 2, limit: 30)
+        expect(results_page2).to be_an(Array)
+      end
+    end
+
+    it "validates page parameter" do
+      expect {
+        client.search_gems("rails", page: 0)
+      }.to raise_error(RubygemsMcp::ValidationError, /Page must be positive/)
+    end
+
+    it "validates empty query" do
+      expect {
+        client.search_gems("")
+      }.to raise_error(RubygemsMcp::ValidationError, /Search query cannot be empty/)
+    end
+
+    it "validates nil query" do
+      expect {
+        client.search_gems(nil)
+      }.to raise_error(RubygemsMcp::ValidationError, /Search query cannot be empty/)
+    end
+  end
+
+  describe "#get_news_releases" do
+    it "fetches news releases", :vcr do
+      VCR.use_cassette("get_news_releases") do
+        releases = client.get_news_releases(page: 1)
+        expect(releases).to be_an(Array)
+        if releases.any?
+          expect(releases.first).to have_key(:name)
+          expect(releases.first).to have_key(:version)
+          expect(releases.first).to have_key(:gem_url)
+        end
+      end
+    end
+
+    it "supports pagination", :vcr do
+      VCR.use_cassette("get_news_releases_page2") do
+        releases = client.get_news_releases(page: 2)
+        expect(releases).to be_an(Array)
+      end
+    end
+
+    it "validates page parameter" do
+      expect {
+        client.get_news_releases(page: 0)
+      }.to raise_error(RubygemsMcp::ValidationError, /Page must be positive/)
+    end
+
+    it "caches news releases" do
+      client.class.cache.clear
+      VCR.use_cassette("get_news_releases") do
+        releases1 = client.get_news_releases(page: 1)
+        releases2 = client.get_news_releases(page: 1)
+        expect(releases1).to eq(releases2)
+      end
+    end
+
+    it "handles empty response" do
+      client.class.cache.clear
+      html = <<~HTML
+        <html>
+          <head><title>RubyGems News</title></head>
+          <body>
+            <h1>New Releases</h1>
+            <p>No new releases at this time.</p>
+            <p>This page contains enough text content to pass HTML validation requirements.</p>
+            <p>There are no gem links on this page to ensure empty results.</p>
+          </body>
+        </html>
+      HTML
+
+      VCR.turned_off do
+        stub_request(:get, "https://rubygems.org/news")
+          .with(headers: {"Accept" => "text/html"})
+          .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+        releases = client.get_news_releases(page: 1)
+        expect(releases).to eq([])
+      end
+    end
+  end
+
+  describe "#get_popular_releases" do
+    it "fetches popular releases", :vcr do
+      VCR.use_cassette("get_popular_releases") do
+        releases = client.get_popular_releases(page: 1)
+        expect(releases).to be_an(Array)
+        if releases.any?
+          expect(releases.first).to have_key(:name)
+          expect(releases.first).to have_key(:version)
+          expect(releases.first).to have_key(:gem_url)
+        end
+      end
+    end
+
+    it "supports pagination", :vcr do
+      VCR.use_cassette("get_popular_releases_page2") do
+        releases = client.get_popular_releases(page: 2)
+        expect(releases).to be_an(Array)
+      end
+    end
+
+    it "validates page parameter" do
+      expect {
+        client.get_popular_releases(page: 0)
+      }.to raise_error(RubygemsMcp::ValidationError, /Page must be positive/)
+    end
+
+    it "caches popular releases" do
+      client.class.cache.clear
+      VCR.use_cassette("get_popular_releases") do
+        releases1 = client.get_popular_releases(page: 1)
+        releases2 = client.get_popular_releases(page: 1)
+        expect(releases1).to eq(releases2)
+      end
+    end
+
+    it "handles empty response" do
+      client.class.cache.clear
+      html = <<~HTML
+        <html>
+          <head><title>Popular Releases</title></head>
+          <body>
+            <h1>Popular Releases</h1>
+            <p>No popular releases at this time.</p>
+            <p>This page contains enough text content to pass HTML validation requirements.</p>
+            <p>There are no gem links on this page to ensure empty results.</p>
+          </body>
+        </html>
+      HTML
+
+      VCR.turned_off do
+        stub_request(:get, "https://rubygems.org/releases/popular")
+          .with(headers: {"Accept" => "text/html"})
+          .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+        releases = client.get_popular_releases(page: 1)
+        expect(releases).to eq([])
+      end
+    end
   end
 
   describe "#get_gem_versions" do
@@ -719,6 +868,38 @@ RSpec.describe RubygemsMcp::Client do
       end
     end
 
+    it "handles long changelog content with truncation when rindex returns nil" do
+      client.class.cache.clear
+      allow(client).to receive(:get_gem_info).and_return({
+        name: "test_gem",
+        version: "1.0.0",
+        changelog_uri: "https://example.com/changelog"
+      })
+
+      # Create content over 10000 chars with no double newlines in first 10000 chars
+      # This will cause rindex(/\n\n/) to return nil, triggering line 911 fallback
+      long_content = "A" * 10001 # Single line, no paragraph breaks
+      html = <<~HTML
+        <html>
+          <body>
+            <div class="markdown-body">
+              <p>#{long_content}</p>
+            </div>
+          </body>
+        </html>
+      HTML
+
+      stub_request(:get, "https://example.com/changelog")
+        .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+      result = client.get_gem_changelog("test_gem")
+      # Should truncate at 10000 chars when rindex returns nil (line 911)
+      # The code does: summary_text[0..(cut_point || 10000)].strip + "\n\n..."
+      # When cut_point is nil, it uses 10000, strips, then adds 3 chars
+      expect(result[:summary].length).to be <= 10006 # Allow some margin for strip
+      expect(result[:summary]).to end_with("...")
+    end
+
     it "handles long changelog content without paragraph breaks for truncation" do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
@@ -898,6 +1079,90 @@ RSpec.describe RubygemsMcp::Client do
       # Should remove trailing "Guides" (line 896)
       expect(result[:summary]).not_to include("Guides")
     end
+
+    it "filters author names after punctuation" do
+      client.class.cache.clear
+      allow(client).to receive(:get_gem_info).and_return({
+        name: "test_gem",
+        version: "1.0.0",
+        changelog_uri: "https://example.com/changelog"
+      })
+
+      html = <<~HTML
+        <html>
+          <body>
+            <div class="markdown-body">
+              <p>Fixed a critical bug in the authentication system.</p>
+              <p>John Smith</p>
+              <p>Added new feature for better performance.</p>
+              <p>Jane Doe</p>
+            </div>
+          </body>
+        </html>
+      HTML
+
+      stub_request(:get, "https://example.com/changelog")
+        .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+      result = client.get_gem_changelog("test_gem")
+      # Author names after punctuation should be filtered out (lines 877-886)
+      expect(result[:summary]).not_to include("John Smith")
+      expect(result[:summary]).not_to include("Jane Doe")
+    end
+
+    it "removes trailing 'No changes.' text" do
+      client.class.cache.clear
+      allow(client).to receive(:get_gem_info).and_return({
+        name: "test_gem",
+        version: "1.0.0",
+        changelog_uri: "https://example.com/changelog"
+      })
+
+      html = <<~HTML
+        <html>
+          <body>
+            <div class="markdown-body">
+              <p>This is a meaningful changelog entry with enough content.</p>
+              <p>No changes.</p>
+            </div>
+          </body>
+        </html>
+      HTML
+
+      stub_request(:get, "https://example.com/changelog")
+        .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+      result = client.get_gem_changelog("test_gem")
+      # Trailing "No changes." should be removed (line 898)
+      expect(result[:summary]).not_to include("No changes")
+    end
+
+    it "handles first line being an author name" do
+      client.class.cache.clear
+      allow(client).to receive(:get_gem_info).and_return({
+        name: "test_gem",
+        version: "1.0.0",
+        changelog_uri: "https://example.com/changelog"
+      })
+
+      html = <<~HTML
+        <html>
+          <body>
+            <div class="markdown-body">
+              <p>John Smith</p>
+              <p>This is a meaningful changelog entry with enough content.</p>
+            </div>
+          </body>
+        </html>
+      HTML
+
+      stub_request(:get, "https://example.com/changelog")
+        .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+      result = client.get_gem_changelog("test_gem")
+      # First line author name should be filtered out (line 885)
+      expect(result[:summary]).not_to start_with("John Smith")
+    end
   end
 
   describe "#get_gem_info" do
@@ -923,6 +1188,40 @@ RSpec.describe RubygemsMcp::Client do
         expect(info[:sha]).to be_a(String).or be_nil
         expect(info[:spec_sha]).to be_a(String).or be_nil
       end
+    end
+
+    it "returns cached gem info with field selection" do
+      # Set up cache
+      cache_key = "gem_info:test_gem"
+      cached_info = {
+        name: "test_gem",
+        version: "1.0.0",
+        summary: "Test gem",
+        downloads: 1000,
+        homepage: "https://example.com"
+      }
+      client.class.cache.set(cache_key, cached_info, 3600)
+
+      # Test with fields parameter when cached (lines 945-946)
+      result = client.get_gem_info("test_gem", fields: ["name", "version"])
+      expect(result.keys).to contain_exactly(:name, :version)
+      expect(result[:name]).to eq("test_gem")
+      expect(result[:version]).to eq("1.0.0")
+    end
+
+    it "returns cached gem info without field selection" do
+      # Set up cache
+      cache_key = "gem_info:test_gem"
+      cached_info = {
+        name: "test_gem",
+        version: "1.0.0",
+        summary: "Test gem"
+      }
+      client.class.cache.set(cache_key, cached_info, 3600)
+
+      # Test without fields parameter when cached (line 946)
+      result = client.get_gem_info("test_gem")
+      expect(result).to eq(cached_info)
     end
   end
 
@@ -2194,6 +2493,283 @@ RSpec.describe RubygemsMcp::Client do
       result = client.get_ruby_version_roadmap_details("3.5")
       expect(result[:issues].length).to eq(1)
       expect(result[:issues].first[:id]).to eq("19999")
+    end
+  end
+
+  describe "edge cases for coverage" do
+    describe "#get_gem_versions" do
+      it "handles non-Array response" do
+        client.class.cache.clear
+        stub_request(:get, "https://rubygems.org/api/v1/versions/test_gem.json")
+          .to_return(status: 200, body: '{"error": "not an array"}', headers: {"Content-Type" => "application/json"})
+
+        expect {
+          client.get_gem_versions("test_gem")
+        }.to raise_error(RubygemsMcp::CorruptedDataError) do |error|
+          expect(error.message).to include("expected Array")
+        end
+      end
+    end
+
+    describe "#get_ruby_version_changelog" do
+      it "handles ArgumentError when normalizing version" do
+        allow(client).to receive(:get_ruby_versions).and_return([
+          {version: "3.4.7", release_notes_url: "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/"}
+        ])
+
+        html = <<~HTML
+          <html>
+            <body>
+              <div id='content'>
+                <h1>Ruby 3.4.7 Released</h1>
+                <p>This is a release announcement with enough content to pass HTML validation.</p>
+                <p>It contains multiple paragraphs to ensure the text length requirement is met.</p>
+              </div>
+            </body>
+          </html>
+        HTML
+
+        stub_request(:get, "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/")
+          .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+        # This should handle the version normalization gracefully
+        result = client.get_ruby_version_changelog("3.4.7")
+        expect(result).to have_key(:version)
+      end
+
+      it "handles ArgumentError during version normalization" do
+        allow(client).to receive(:get_ruby_versions).and_return([
+          {version: "3.4.7", release_notes_url: "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/"}
+        ])
+
+        html = <<~HTML
+          <html>
+            <body>
+              <div id='content'>
+                <h1>Ruby Release</h1>
+                <p>This is a release announcement with enough content to pass HTML validation.</p>
+                <p>It contains multiple paragraphs to ensure the text length requirement is met.</p>
+              </div>
+            </body>
+          </html>
+        HTML
+
+        stub_request(:get, "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/")
+          .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+        # Stub validate_version_string to bypass validation
+        allow(client).to receive(:validate_version_string).and_return("3.4.7")
+        # Mock Gem::Version.new to raise ArgumentError during normalization (line 361)
+        # This tests the rescue block at line 363
+        allow(Gem::Version).to receive(:new).with("3.4.7").and_raise(ArgumentError.new("Malformed version"))
+        
+        result = client.get_ruby_version_changelog("3.4.7")
+        # Should still work because ArgumentError is rescued and original version is used (line 363)
+        expect(result).to have_key(:version)
+        expect(result[:version]).to eq("3.4.7")
+      end
+    end
+
+    describe "#get_news_releases" do
+      it "handles links without gem names" do
+        html = <<~HTML
+          <html>
+            <head><title>RubyGems News</title></head>
+            <body>
+              <h1>New Releases</h1>
+              <p>This page contains enough text content to pass HTML validation requirements.</p>
+              <a href="/gems/">Not a gem link</a>
+              <a href="/other/path">Other link</a>
+            </body>
+          </html>
+        HTML
+
+        stub_request(:get, "https://rubygems.org/news")
+          .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+        releases = client.get_news_releases(page: 1)
+        expect(releases).to eq([])
+      end
+
+      it "handles links without container" do
+        html = <<~HTML
+          <html>
+            <head><title>RubyGems News</title></head>
+            <body>
+              <h1>New Releases</h1>
+              <p>This page contains enough text content to pass HTML validation requirements.</p>
+              <a href="/gems/test_gem">test_gem</a>
+            </body>
+          </html>
+        HTML
+
+        stub_request(:get, "https://rubygems.org/news")
+          .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+        releases = client.get_news_releases(page: 1)
+        expect(releases).to eq([])
+      end
+
+      it "handles date parsing errors" do
+        html = <<~HTML
+          <html>
+            <head><title>RubyGems News</title></head>
+            <body>
+              <h1>New Releases</h1>
+              <p>This page contains enough text content to pass HTML validation requirements.</p>
+              <li>
+                <a href="/gems/test_gem">test_gem 1.0.0</a>
+                <span>Invalid date format that will cause Date::Error</span>
+              </li>
+            </body>
+          </html>
+        HTML
+
+        stub_request(:get, "https://rubygems.org/news")
+          .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+        releases = client.get_news_releases(page: 1)
+        expect(releases).to be_an(Array)
+        if releases.any?
+          expect(releases.first[:release_date]).to be_nil
+        end
+      end
+
+      it "handles Date::Error when parsing date" do
+        VCR.turned_off do
+          client.class.cache.clear
+          html = <<~HTML
+            <html>
+              <head><title>RubyGems News</title></head>
+              <body>
+                <h1>New Releases</h1>
+                <p>This page contains enough text content to pass HTML validation requirements.</p>
+                <li>
+                  <a href="/gems/test_gem">test_gem 1.0.0</a>
+                  <span>InvalidMonth 99, 2025</span>
+                </li>
+              </body>
+            </html>
+          HTML
+
+          stub_request(:get, "https://rubygems.org/news")
+            .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+          releases = client.get_news_releases(page: 1)
+          expect(releases).to be_an(Array)
+          expect(releases.length).to eq(1)
+          # Date::Error should be rescued and release_date should be nil (line 1142)
+          # "InvalidMonth 99, 2025" matches the regex but Date.parse will fail
+          expect(releases.first[:release_date]).to be_nil
+        end
+      end
+
+      it "handles page 2 with query parameter" do
+        html = <<~HTML
+          <html>
+            <head><title>RubyGems News</title></head>
+            <body>
+              <h1>New Releases</h1>
+              <p>This page contains enough text content to pass HTML validation requirements.</p>
+              <li>
+                <a href="/gems/test_gem">test_gem 1.0.0</a>
+                <span>November 26, 2025</span>
+              </li>
+            </body>
+          </html>
+        HTML
+
+        stub_request(:get, "https://rubygems.org/news?page=2")
+          .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+        releases = client.get_news_releases(page: 2)
+        expect(releases).to be_an(Array)
+      end
+    end
+
+    describe "#get_popular_releases" do
+      it "handles links without gem names" do
+        html = <<~HTML
+          <html>
+            <head><title>Popular Releases</title></head>
+            <body>
+              <h1>Popular Releases</h1>
+              <p>This page contains enough text content to pass HTML validation requirements.</p>
+              <a href="/gems/">Not a gem link</a>
+            </body>
+          </html>
+        HTML
+
+        stub_request(:get, "https://rubygems.org/releases/popular")
+          .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+        releases = client.get_popular_releases(page: 1)
+        expect(releases).to eq([])
+      end
+
+      it "handles page 2 with query parameter" do
+        html = <<~HTML
+          <html>
+            <head><title>Popular Releases</title></head>
+            <body>
+              <h1>Popular Releases</h1>
+              <p>This page contains enough text content to pass HTML validation requirements.</p>
+              <li>
+                <a href="/gems/test_gem">test_gem 1.0.0</a>
+                <span>November 26, 2025</span>
+              </li>
+            </body>
+          </html>
+        HTML
+
+        stub_request(:get, "https://rubygems.org/releases/popular?page=2")
+          .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+        releases = client.get_popular_releases(page: 2)
+        expect(releases).to be_an(Array)
+      end
+
+      it "handles Date::Error when parsing date" do
+        VCR.turned_off do
+          client.class.cache.clear
+          html = <<~HTML
+            <html>
+              <head><title>Popular Releases</title></head>
+              <body>
+                <h1>Popular Releases</h1>
+                <p>This page contains enough text content to pass HTML validation requirements.</p>
+                <li>
+                  <a href="/gems/test_gem">test_gem 1.0.0</a>
+                  <span>InvalidMonth 99, 2025</span>
+                </li>
+              </body>
+            </html>
+          HTML
+
+          stub_request(:get, "https://rubygems.org/releases/popular")
+            .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
+
+          releases = client.get_popular_releases(page: 1)
+          expect(releases).to be_an(Array)
+          expect(releases.length).to eq(1)
+          # Date::Error should be rescued and release_date should be nil (line 1213)
+          # "InvalidMonth 99, 2025" matches the regex but Date.parse will fail
+          expect(releases.first[:release_date]).to be_nil
+        end
+      end
+    end
+
+    describe "#search_gems" do
+      it "handles page parameter conversion" do
+        stub_request(:get, "https://rubygems.org/api/v1/search.json?query=test")
+          .to_return(status: 200, body: (1..60).map { |i| {name: "test_gem_#{i}", version: "1.0.0"} }.to_json, headers: {"Content-Type" => "application/json"})
+
+        results_page1 = client.search_gems("test", page: 1, limit: 30)
+        results_page2 = client.search_gems("test", page: 2, limit: 30)
+        expect(results_page1.length).to eq(30)
+        expect(results_page2.length).to eq(30)
+        expect(results_page1.first[:name]).not_to eq(results_page2.first[:name])
+      end
     end
   end
 end

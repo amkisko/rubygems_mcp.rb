@@ -10,39 +10,6 @@ require "securerandom"
 # Alias MCP to FastMcp for compatibility
 FastMcp = MCP unless defined?(FastMcp)
 
-# Monkey-patch fast-mcp to ensure error responses always have a valid id
-# JSON-RPC 2.0 allows id: null for notifications, but MCP clients (Cursor/Inspector)
-# use strict Zod validation that requires id to be a string or number
-module MCP
-  module Transports
-    class StdioTransport
-      if method_defined?(:send_error)
-        alias_method :original_send_error, :send_error
-
-        def send_error(code, message, id = nil)
-          # Use placeholder id if nil to satisfy strict MCP client validation
-          # JSON-RPC 2.0 allows null for notifications, but MCP clients require valid id
-          id = "error_#{SecureRandom.hex(8)}" if id.nil?
-          original_send_error(code, message, id)
-        end
-      end
-    end
-  end
-
-  class Server
-    if method_defined?(:send_error)
-      alias_method :original_send_error, :send_error
-
-      def send_error(code, message, id = nil)
-        # Use placeholder id if nil to satisfy strict MCP client validation
-        # JSON-RPC 2.0 allows null for notifications, but MCP clients require valid id
-        id = "error_#{SecureRandom.hex(8)}" if id.nil?
-        original_send_error(code, message, id)
-      end
-    end
-  end
-end
-
 module RubygemsMcp
   # MCP Server for RubyGems integration
   #
@@ -134,6 +101,8 @@ module RubygemsMcp
       server.register_tool(GetRubyVersionRoadmapDetailsTool)
       server.register_tool(GetRubyVersionGithubChangelogTool)
       server.register_tool(GetGemVersionInfoTool)
+      server.register_tool(GetNewsReleasesTool)
+      server.register_tool(GetPopularReleasesTool)
     end
 
     def self.register_resources(server)
@@ -381,10 +350,41 @@ module RubygemsMcp
 
       arguments do
         required(:query).filled(:string).description("Search query (e.g., 'rails')")
+        optional(:page).filled(:integer).description("Page number (1-based). If provided, overrides offset")
+        optional(:limit).filled(:integer).description("Maximum number of results to return")
+        optional(:offset).filled(:integer).description("Number of results to skip (for pagination)")
       end
 
-      def call(query:)
-        get_client.search_gems(query)
+      def call(query:, page: nil, limit: nil, offset: 0)
+        get_client.search_gems(query, page: page, limit: limit, offset: offset)
+      end
+    end
+
+    # Get news releases (all new gem releases)
+    class GetNewsReleasesTool < BaseTool
+      tool_name "get_news_releases"
+      description "Get news releases - all new gem releases from RubyGems.org with pagination"
+
+      arguments do
+        optional(:page).filled(:integer).description("Page number (1-based, default: 1)")
+      end
+
+      def call(page: 1)
+        get_client.get_news_releases(page: page)
+      end
+    end
+
+    # Get popular releases (popular new gem releases)
+    class GetPopularReleasesTool < BaseTool
+      tool_name "get_popular_releases"
+      description "Get popular releases - popular new gem releases from RubyGems.org with pagination"
+
+      arguments do
+        optional(:page).filled(:integer).description("Page number (1-based, default: 1)")
+      end
+
+      def call(page: 1)
+        get_client.get_popular_releases(page: page)
       end
     end
 
@@ -430,39 +430,50 @@ module RubygemsMcp
       end
     end
 
-    # Resource: Popular Ruby gems list
+    # Resource: Popular Ruby gems list with real-time data
     class PopularGemsResource < FastMcp::Resource
       uri "rubygems://popular"
       resource_name "Popular Ruby Gems"
-      description "A curated list of popular Ruby gems with their latest versions"
+      description "Popular new gem releases from RubyGems.org with their versions, download counts, and metadata"
       mime_type "application/json"
 
       def content
         client = Client.new
-        popular_gems = %w[
-          rails nokogiri bundler rake rspec devise puma sidekiq
-          pg mysql2 redis json webrick sinatra haml sass
-          jekyll octokit faraday httparty rest-client
-        ]
-
-        gems_data = popular_gems.map do |gem_name|
-          versions = client.get_gem_versions(gem_name, limit: 1, fields: ["name", "version", "release_date"])
-          latest = versions.first
-          if latest
-            result = latest.dup
-            result[:name] = gem_name
-            result
-          else
-            {name: gem_name, version: nil, release_date: nil}
-          end
-        rescue ResponseSizeExceededError, CorruptedDataError => e
-          # Skip gems that exceed size limit or have corrupted data
-          {name: gem_name, version: nil, release_date: nil, error: e.message}
+        # Get popular releases from the first 3 pages (up to ~30 gems)
+        all_releases = []
+        (1..3).each do |page|
+          releases = client.get_popular_releases(page: page)
+          break if releases.empty?
+          all_releases.concat(releases)
+        rescue
+          # If a page fails, continue with what we have
+          break
         end
 
-        # Filter out gems that weren't found (nil versions)
-        gems_data = gems_data.reject { |g| g[:version].nil? }
-        JSON.pretty_generate(gems_data)
+        # Limit to top 20 most popular by downloads
+        gems_data = all_releases
+          .select { |g| g[:downloads] && g[:downloads] > 0 }
+          .sort_by { |g| g[:downloads] || 0 }
+          .last(20).reverse
+          .map do |release|
+            {
+              name: release[:name],
+              version: release[:version],
+              release_date: release[:release_date],
+              downloads: release[:downloads],
+              info: release[:info],
+              gem_url: release[:gem_url]
+            }
+          end
+
+        result = {
+          updated_at: Time.now.iso8601,
+          total_gems: gems_data.length,
+          source: "rubygems.org/releases/popular",
+          gems: gems_data
+        }
+
+        JSON.pretty_generate(result)
       end
     end
 
@@ -528,17 +539,32 @@ module RubygemsMcp
       end
     end
 
-    # Resource: Latest Ruby version
+    # Resource: Latest Ruby version with additional context
     class LatestRubyVersionResource < FastMcp::Resource
       uri "rubygems://ruby/latest"
       resource_name "Latest Ruby Version"
-      description "The latest stable Ruby version with release date"
+      description "The latest stable Ruby version with release date, maintenance status, and compatibility information"
       mime_type "application/json"
 
       def content
         client = Client.new
         latest = client.get_latest_ruby_version
-        JSON.pretty_generate(latest)
+        maintenance_status = client.get_ruby_maintenance_status
+
+        # Find maintenance info for the latest version
+        latest_major_minor = latest[:version]&.match(/^(\d+\.\d+)/)&.[](1)
+        maintenance_info = maintenance_status.find { |m| m[:version] == latest_major_minor } if latest_major_minor
+
+        result = {
+          version: latest[:version],
+          release_date: latest[:release_date],
+          maintenance_status: maintenance_info&.dig(:status),
+          normal_maintenance_until: maintenance_info&.dig(:normal_maintenance_until),
+          eol: maintenance_info&.dig(:eol),
+          updated_at: Time.now.iso8601
+        }
+
+        JSON.pretty_generate(result)
       end
     end
   end

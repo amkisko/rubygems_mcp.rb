@@ -1,11 +1,15 @@
 require "simplecov"
+require "simplecov-cobertura"
+
 SimpleCov.start do
   add_filter "/spec/"
   add_filter { |source_file| source_file.lines.count < 5 }
-end
 
-require "simplecov-cobertura"
-SimpleCov.formatter = SimpleCov::Formatter::CoberturaFormatter
+  formatter SimpleCov::Formatter::MultiFormatter.new([
+    SimpleCov::Formatter::HTMLFormatter,
+    SimpleCov::Formatter::CoberturaFormatter
+  ])
+end
 
 require "rspec"
 require "vcr"
@@ -52,5 +56,18 @@ end
 RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = :expect
+  end
+end
+
+# Run coverage analyzer after SimpleCov finishes writing coverage.xml
+# Use SimpleCov.at_exit to ensure our hook runs after the formatter writes files
+# We need to call the formatter first, then run our analyzer
+if ENV["SHOW_ZERO_COVERAGE"] == "1"
+  SimpleCov.at_exit do
+    # First, ensure the formatter runs (this writes coverage.xml)
+    SimpleCov.result.format!
+    # Then run our analyzer
+    require_relative "support/coverage_analyzer"
+    CoverageAnalyzer.run
   end
 end

@@ -224,6 +224,8 @@ recently_updated = client.get_recently_updated_gems(limit: 10)
 
 - `get_latest_gems(limit: 30)` - Get latest gems - most recently added gems to RubyGems.org
 - `get_recently_updated_gems(limit: 30)` - Get recently updated gems - most recently updated gem versions
+- `get_news_releases(page: 1)` - Get news releases - all new gem releases from RubyGems.org with pagination (fetches from `/news?page=N`)
+- `get_popular_releases(page: 1)` - Get popular releases - popular new gem releases from RubyGems.org with pagination (fetches from `/releases/popular?page=N`)
 
 ## MCP Server Integration
 
@@ -294,6 +296,14 @@ The MCP server provides the following tools:
 
 16. **get_ruby_version_github_changelog** - Get GitHub release changelog for a Ruby version from the ruby/ruby repository
    - Parameters: `version` (string, e.g., "3.4.7", "3.4.0")
+
+17. **get_news_releases** - Get news releases - all new gem releases from RubyGems.org with pagination
+   - Parameters: `page` (optional integer, default: 1) - Page number (1-based)
+   - Fetches from: `https://rubygems.org/news?page=N`
+
+18. **get_popular_releases** - Get popular releases - popular new gem releases from RubyGems.org with pagination
+   - Parameters: `page` (optional integer, default: 1) - Page number (1-based)
+   - Fetches from: `https://rubygems.org/releases/popular?page=N`
 
 ## MCP Resources
 

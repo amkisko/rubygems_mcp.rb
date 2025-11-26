@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 0.1.4 (2025-11-26)
+
+- Add `get_news_releases` tool to fetch all new gem releases from RubyGems.org with pagination (fetches from `/news?page=N`)
+- Add `get_popular_releases` tool to fetch popular new gem releases from RubyGems.org with pagination (fetches from `/releases/popular?page=N`)
+- Add pagination support for `search_gems` tool via `page` parameter (converts page to offset automatically)
+- Remove old patch code: unused monkey patches for fast-mcp `send_error`
+
 ## 0.1.3 (2025-11-21)
 
 - Add Ruby roadmap tools: `get_ruby_roadmap` and `get_ruby_version_roadmap_details` for accessing Ruby version planning information from bugs.ruby-lang.org
