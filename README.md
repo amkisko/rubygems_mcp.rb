@@ -1,6 +1,6 @@
 # rubygems_mcp
 
-[![Gem Version](https://badge.fury.io/rb/rubygems_mcp.svg?v=0.1.3)](https://badge.fury.io/rb/rubygems_mcp) [![Test Status](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml/badge.svg)](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/amkisko/rubygems_mcp.rb/graph/badge.svg?token=APQ6AK7EC9)](https://codecov.io/gh/amkisko/rubygems_mcp.rb)
+[![Gem Version](https://badge.fury.io/rb/rubygems_mcp.svg?v=0.1.3)](https://badge.fury.io/rb/rubygems_mcp) [![Test Status](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml/badge.svg)](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/amkisko/rubygems_mcp.rb/graph/badge.svg?token=APQ6AK7EC9)](https://codecov.io/gh/amkisko/rubygems_mcp.rb) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=amkisko_rubygems_mcp.rb&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=amkisko_rubygems_mcp.rb)
 
 Ruby gem providing RubyGems and Ruby version information via MCP (Model Context Protocol) server tools. Integrates with MCP-compatible clients like Cursor IDE, Claude Desktop, and other MCP-enabled tools.
 
