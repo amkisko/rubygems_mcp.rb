@@ -392,9 +392,7 @@ RSpec.describe RubygemsMcp::Client do
         # Just verify we get an array
         expect(deps.all? { |d| d.is_a?(String) }).to be true if deps.length > 0
       rescue ResponseSizeExceededError
-        # If response is too large, that's also a valid test outcome
-        # The protection is working
-        expect(true).to be true
+        # Response size protection exercised successfully.
       end
     end
 
@@ -447,7 +445,7 @@ RSpec.describe RubygemsMcp::Client do
         )
 
       result = client.get_gem_version_info("devise", "0.1.0", fields: ["name", "version", "version_downloads"])
-      expect(result.keys).to match_array([:name, :version, :version_downloads])
+      expect(result.keys).to contain_exactly(:name, :version, :version_downloads)
     end
 
     it "uses cache when available" do

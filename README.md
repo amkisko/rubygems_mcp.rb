@@ -1,6 +1,6 @@
 # rubygems_mcp
 
-[![Gem Version](https://badge.fury.io/rb/rubygems_mcp.svg?v=0.1.3)](https://badge.fury.io/rb/rubygems_mcp) [![Test Status](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml/badge.svg)](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/amkisko/rubygems_mcp.rb/graph/badge.svg?token=APQ6AK7EC9)](https://codecov.io/gh/amkisko/rubygems_mcp.rb) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=amkisko_rubygems_mcp.rb&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=amkisko_rubygems_mcp.rb)
+[![Gem Version](https://badge.fury.io/rb/rubygems_mcp.svg?v=0.1.3)](https://badge.fury.io/rb/rubygems_mcp) [![Test Status](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml/badge.svg)](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/amkisko/rubygems_mcp.rb/graph/badge.svg?token=APQ6AK7EC9)](https://app.codecov.io/github/amkisko/rubygems_mcp.rb) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=amkisko_rubygems_mcp.rb&metric=alert_status)](https://sonarcloud.io/project/overview?id=amkisko_rubygems_mcp.rb)
 
 Ruby gem providing RubyGems and Ruby version information via MCP (Model Context Protocol) server tools. Integrates with MCP-compatible clients like Cursor IDE, Claude Desktop, and other MCP-enabled tools.
 
@@ -371,6 +371,18 @@ For more information, see [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Security
 
 If you discover a security vulnerability, please report it responsibly. See [SECURITY.md](SECURITY.md) for details.
+
+## Links
+
+- [GitHub](https://github.com/amkisko/rubygems_mcp.rb)
+- [GitLab](https://gitlab.com/amkisko/rubygems_mcp.rb)
+- [RubyGems](https://rubygems.org/gems/rubygems_mcp)
+- [libraries.io](https://libraries.io/rubygems/rubygems_mcp)
+- [Deps.dev](https://deps.dev/rubygems/rubygems_mcp)
+- [SonarCloud](https://sonarcloud.io/project/overview?id=amkisko_rubygems_mcp.rb)
+- [Snyk](https://snyk.io/test/github/amkisko/rubygems_mcp.rb)
+- [Codecov](https://app.codecov.io/github/amkisko/rubygems_mcp.rb)
+- [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/amkisko/rubygems_mcp.rb)
 
 ## License
 

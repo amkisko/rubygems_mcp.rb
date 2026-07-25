@@ -22,7 +22,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # Enforce Ruby >= 3.1 for modern Ruby features and security
-  spec.required_ruby_version = ">= 3.1"
+  spec.required_ruby_version = ">= 3.4"
 
   # Comprehensive metadata following RubyGems best practices
   spec.metadata = {
@@ -41,6 +41,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency "base64", "~> 0.1"
 
   spec.add_development_dependency "rspec", "~> 3.13"
+  spec.add_development_dependency "polyrun", ">= 2.2.0"
   spec.add_development_dependency "webmock", "~> 3.26"
   spec.add_development_dependency "vcr", "~> 6.0"
   spec.add_development_dependency "rake", "~> 13.3"
