@@ -132,7 +132,7 @@ module RubygemsMcp
       description "Get latest versions for a list of gems with release dates and licenses. Supports GraphQL-like field selection."
 
       arguments do
-        required(:gem_names).array(:string, min_size?: 1).description("Array of gem names (e.g., ['rails', 'nokogiri', 'rack'])")
+        required(:gem_names).array(:string, min_size?: 1, max_size?: Client::MAX_GEM_NAMES).description("Array of gem names, at most #{Client::MAX_GEM_NAMES} (e.g., ['rails', 'nokogiri', 'rack'])")
         optional(:fields).array(:string).description("GraphQL-like field selection. Available: name, version, release_date, license, built_at, prerelease, platform, ruby_version, rubygems_version, downloads_count, sha, spec_sha, requirements, metadata")
       end
 

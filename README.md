@@ -1,6 +1,6 @@
 # rubygems_mcp
 
-[![Gem Version](https://badge.fury.io/rb/rubygems_mcp.svg?v=0.1.3)](https://badge.fury.io/rb/rubygems_mcp) [![Test Status](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml/badge.svg)](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/amkisko/rubygems_mcp.rb/graph/badge.svg?token=APQ6AK7EC9)](https://app.codecov.io/github/amkisko/rubygems_mcp.rb) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=amkisko_rubygems_mcp.rb&metric=alert_status)](https://sonarcloud.io/project/overview?id=amkisko_rubygems_mcp.rb)
+[![Gem Version](https://badge.fury.io/rb/rubygems_mcp.svg?v=0.1.4)](https://badge.fury.io/rb/rubygems_mcp) [![Test Status](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml/badge.svg)](https://github.com/amkisko/rubygems_mcp.rb/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/amkisko/rubygems_mcp.rb/graph/badge.svg?token=APQ6AK7EC9)](https://app.codecov.io/github/amkisko/rubygems_mcp.rb) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=amkisko_rubygems_mcp.rb&metric=alert_status)](https://sonarcloud.io/project/overview?id=amkisko_rubygems_mcp.rb)
 
 Ruby gem providing RubyGems and Ruby version information via MCP (Model Context Protocol) server tools. Integrates with MCP-compatible clients like Cursor IDE, Claude Desktop, and other MCP-enabled tools.
 
@@ -14,7 +14,7 @@ Sponsored by [Kisko Labs](https://www.kiskolabs.com).
 
 ## Requirements
 
-- **Ruby 3.1 or higher** (Ruby 3.0 and earlier are not supported)
+- **Ruby 3.4 or higher**
 
 ## Quick Start
 
@@ -327,10 +327,7 @@ The MCP server provides the following resources:
 
 ## Error Handling
 
-The client handles errors gracefully:
-- Returns empty arrays for failed requests
-- Returns empty hashes for failed gem info requests
-- Handles network errors and JSON parsing errors
+HTTP failures raise `NotFoundError`, `ServerError`, or `APIError`. Unreadable JSON or HTML raises `CorruptedDataError`. Bodies over 5MB raise `ResponseSizeExceededError`. Invalid input, including more than 20 names on `get_latest_versions`, raises `ValidationError`.
 
 ## Development
 

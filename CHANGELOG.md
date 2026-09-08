@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## Unreleased
+
+- Paginate and cache the Ruby versions list on first fetch
+- Apply the HTTP size limit to GitHub Ruby changelogs
+- Limit latest-version lookups to 20 gem names
+- Document Ruby 3.4 and raised client errors
+- Refresh json, addressable, concurrent-ruby, and rack past published advisories
+
 ## 0.1.4 (2025-11-26)
 
 - Add `get_news_releases` tool to fetch all new gem releases from RubyGems.org with pagination (fetches from `/news?page=N`)

@@ -4,6 +4,7 @@ require "openssl"
 require "json"
 require "date"
 require "nokogiri"
+require_relative "network_policy"
 
 module RubygemsMcp
   # RubyGems and Ruby version API client
@@ -20,6 +21,7 @@ module RubygemsMcp
     # Validation constants
     VALID_SORT_ORDERS = %i[version_desc version_asc date_desc date_asc].freeze
     MAX_LIMIT = 1000 # Reasonable upper bound for pagination
+    MAX_GEM_NAMES = 20
 
     RUBYGEMS_API_BASE = "https://rubygems.org/api/v1"
     RUBYGEMS_API_V2_BASE = "https://rubygems.org/api/v2"
@@ -85,6 +87,9 @@ module RubygemsMcp
     # @return [Array<Hash>] Array of hashes with selected fields
     def get_latest_versions(gem_names, fields: nil)
       raise ValidationError, "gem_names cannot be empty" if gem_names.nil? || gem_names.empty?
+      if gem_names.length > MAX_GEM_NAMES
+        raise ValidationError, "gem_names cannot exceed #{MAX_GEM_NAMES} names"
+      end
       gem_names = gem_names.map { |name| validate_gem_name(name) }
       gem_names.map do |name|
         versions = get_gem_versions(name, limit: 1, fields: fields)
@@ -341,10 +346,13 @@ module RubygemsMcp
       end
 
       # Sort and convert dates to ISO 8601 strings for JSON serialization
-      versions.compact.sort_by { |v| Gem::Version.new(v[:version]) }.reverse.map do |v|
+      versions = versions.compact.sort_by { |v| Gem::Version.new(v[:version]) }.reverse.map do |v|
         v[:release_date] = v[:release_date]&.iso8601
         v
       end
+
+      self.class.cache.set(cache_key, versions, 86400) if @cache_enabled
+      apply_pagination_and_sort(versions, limit: limit, offset: offset, sort: sort)
     end
 
     # Get full changelog content for a Ruby version from release notes
@@ -594,51 +602,30 @@ module RubygemsMcp
         return cached if cached
       end
 
-      # Try GitHub API
       uri = URI("#{GITHUB_RUBY_REPO}/releases/tags/#{tag_name}")
       begin
-        http = build_http_client(uri)
-        request = Net::HTTP::Get.new(uri)
-        request["Accept"] = "application/vnd.github+json"
-        request["User-Agent"] = "rubygems_mcp/#{RubygemsMcp::VERSION}"
-
-        response = http.request(request)
-
-        case response
-        when Net::HTTPSuccess
-          # Parse JSON response
-          body = response.body
-          return {version: version, tag_name: tag_name, name: nil, body: nil, published_at: nil, url: nil, error: "Empty response"} if body.nil? || body.empty?
-
-          begin
-            data = JSON.parse(body.force_encoding("UTF-8"))
-          rescue JSON::ParserError => e
-            raise CorruptedDataError.new(
-              "Failed to parse GitHub API response: #{e.message}",
-              original_error: e,
-              uri: uri.to_s
-            )
-          end
-
-          result = {
-            version: version,
-            tag_name: tag_name,
-            name: data["name"],
-            body: data["body"],
-            published_at: data["published_at"],
-            url: data["html_url"]
-          }
-
-          # Cache for 24 hours
-          self.class.cache.set(cache_key, result, 86400) if @cache_enabled
-
-          result
-        when Net::HTTPNotFound
-          {version: version, tag_name: tag_name, name: nil, body: nil, published_at: nil, url: nil, error: "Release not found on GitHub"}
-        else
-          handle_http_error(response, uri)
+        data = make_request(uri, headers: {"Accept" => "application/vnd.github+json"})
+        unless data.is_a?(Hash)
+          raise CorruptedDataError.new(
+            "Invalid JSON structure: expected Hash, got #{data.class}",
+            uri: uri.to_s
+          )
         end
-      rescue APIError
+
+        result = {
+          version: version,
+          tag_name: tag_name,
+          name: data["name"],
+          body: data["body"],
+          published_at: data["published_at"],
+          url: data["html_url"]
+        }
+
+        self.class.cache.set(cache_key, result, 86400) if @cache_enabled
+        result
+      rescue NotFoundError
+        {version: version, tag_name: tag_name, name: nil, body: nil, published_at: nil, url: nil, error: "Release not found on GitHub"}
+      rescue ResponseSizeExceededError, CorruptedDataError, APIError
         raise
       rescue => e
         raise APIError.new(
@@ -809,8 +796,8 @@ module RubygemsMcp
         return cached if cached
       end
 
-      uri = URI(changelog_uri)
-      response = make_request(uri, parse_html: true)
+      uri, ip_address = NetworkPolicy.validate!(changelog_uri)
+      response = make_request(uri, parse_html: true, ip_address: ip_address)
       return {gem_name: gem_name, version: version, changelog_uri: changelog_uri, summary: nil, error: "Failed to fetch changelog"} unless response
 
       # Extract the main content - try GitHub release page first, then generic selectors
@@ -1408,8 +1395,9 @@ module RubygemsMcp
     #
     # @param uri [URI] URI object for the request
     # @return [Net::HTTP] Configured HTTP client
-    def build_http_client(uri)
+    def build_http_client(uri, ip_address: nil)
       http = Net::HTTP.new(uri.host, uri.port)
+      http.ipaddr = ip_address if ip_address
       http.read_timeout = 10
       http.open_timeout = 10
 
@@ -1431,12 +1419,13 @@ module RubygemsMcp
       http
     end
 
-    def make_request(uri, parse_html: false)
-      http = build_http_client(uri)
+    def make_request(uri, parse_html: false, ip_address: nil, headers: {})
+      http = build_http_client(uri, ip_address: ip_address)
 
       request = Net::HTTP::Get.new(uri)
       request["Accept"] = parse_html ? "text/html" : "application/json"
       request["User-Agent"] = "rubygems_mcp/#{RubygemsMcp::VERSION}"
+      headers.each { |name, value| request[name] = value }
 
       response = http.request(request)
 

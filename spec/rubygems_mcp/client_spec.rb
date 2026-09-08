@@ -328,9 +328,13 @@ RSpec.describe RubygemsMcp::Client do
   end
 
   describe "#get_ruby_versions" do
+    after { client.class.cache.clear }
+
     it "includes download_url and release_notes_url", :vcr do
       VCR.use_cassette("get_ruby_versions_with_urls") do
+        client.class.cache.clear
         versions = client.get_ruby_versions(limit: 1)
+        expect(versions.length).to eq(1)
         expect(versions.first[:download_url]).to be_a(String)
         expect(versions.first[:release_notes_url]).to be_a(String)
       end
@@ -338,15 +342,49 @@ RSpec.describe RubygemsMcp::Client do
 
     it "supports pagination and sorting", :vcr do
       VCR.use_cassette("get_ruby_versions_pagination_sorting") do
-        # Test that we can get versions with sorting
         versions = client.get_ruby_versions(sort: :version_desc)
         expect(versions.length).to be > 0
         expect(versions.first[:version]).to be_a(String)
-
-        # Test limit - note: limit is applied in apply_pagination_and_sort
-        # which happens after fetching, so we test that sorting works
         expect(versions.first[:version]).to match(/\d+\.\d+\.\d+/)
       end
+    end
+
+    it "limits a cold cache fetch and reuses the full list" do
+      client.class.cache.clear
+      html_body = <<~HTML
+        <!DOCTYPE html>
+        <html>
+        <head><title>Ruby Releases</title></head>
+        <body>
+          <table class="release-list">
+            <tr>
+              <td>Ruby 3.4.7</td>
+              <td>2025-04-14</td>
+              <td><a href="/downloads/3.4.7">Download</a></td>
+              <td><a href="/en/news/3-4-7">News</a></td>
+            </tr>
+            <tr>
+              <td>Ruby 3.3.8</td>
+              <td>2025-04-09</td>
+              <td><a href="/downloads/3.3.8">Download</a></td>
+              <td><a href="/en/news/3-3-8">News</a></td>
+            </tr>
+          </table>
+          <p>This is enough content to pass HTML validation checks and ensure the page is not empty or too short.</p>
+        </body>
+        </html>
+      HTML
+
+      stub_request(:get, "https://www.ruby-lang.org/en/downloads/releases/")
+        .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
+
+      limited = client.get_ruby_versions(limit: 1)
+      expect(limited.length).to eq(1)
+      expect(limited.first[:version]).to eq("3.4.7")
+
+      uncached_page = client.get_ruby_versions(limit: 2)
+      expect(uncached_page.length).to eq(2)
+      expect(a_request(:get, "https://www.ruby-lang.org/en/downloads/releases/")).to have_been_made.once
     end
   end
 
@@ -365,7 +403,7 @@ RSpec.describe RubygemsMcp::Client do
   describe "#get_ruby_version_changelog" do
     it "fetches changelog for Ruby version", :vcr do
       VCR.use_cassette("get_ruby_version_changelog") do
-        # Get a real Ruby version from the releases page
+        client.class.cache.clear
         latest = client.get_latest_ruby_version
         version = latest[:version]
 
@@ -519,6 +557,60 @@ RSpec.describe RubygemsMcp::Client do
   end
 
   describe "#get_gem_changelog" do
+    before do
+      allow(Addrinfo).to receive(:getaddrinfo).and_return(
+        [instance_double(Addrinfo, ip_address: "93.184.216.34")]
+      )
+    end
+
+    it "rejects a gem-controlled changelog URI on a private network" do
+      allow(Addrinfo).to receive(:getaddrinfo).and_return(
+        [instance_double(Addrinfo, ip_address: "127.0.0.1")]
+      )
+      stub_request(:get, "https://rubygems.org/api/v1/gems/internal_changelog.json")
+        .to_return(
+          status: 200,
+          body: {
+            "name" => "internal_changelog",
+            "version" => "1.0.0",
+            "changelog_uri" => "http://127.0.0.1/admin"
+          }.to_json
+        )
+
+      expect {
+        client.get_gem_changelog("internal_changelog")
+      }.to raise_error(RubygemsMcp::ValidationError, /URL destination is not allowed/)
+      expect(a_request(:get, "http://127.0.0.1/admin")).not_to have_been_made
+    end
+
+    it "rejects a changelog hostname that resolves privately" do
+      allow(Addrinfo).to receive(:getaddrinfo).and_return(
+        [instance_double(Addrinfo, ip_address: "127.0.0.1")]
+      )
+      allow(client).to receive(:get_gem_info).and_return(
+        name: "private_hostname",
+        version: "1.0.0",
+        changelog_uri: "http://localhost/admin"
+      )
+
+      expect {
+        client.get_gem_changelog("private_hostname")
+      }.to raise_error(RubygemsMcp::ValidationError, /URL destination is not allowed/)
+      expect(a_request(:get, "http://localhost/admin")).not_to have_been_made
+    end
+
+    it "rejects changelog URL userinfo" do
+      allow(client).to receive(:get_gem_info).and_return(
+        name: "credential_url",
+        version: "1.0.0",
+        changelog_uri: "https://user:password@example.com/changelog"
+      )
+
+      expect {
+        client.get_gem_changelog("credential_url")
+      }.to raise_error(RubygemsMcp::ValidationError, /URL destination is not allowed/)
+    end
+
     it "uses cached changelog when available" do
       # Set up cache with a changelog entry
       cache_key = "gem_changelog:test_gem:1.0.0"
@@ -1621,6 +1713,15 @@ RSpec.describe RubygemsMcp::Client do
       }.to raise_error(RubygemsMcp::ValidationError, /cannot be empty/)
     end
 
+    it "rejects more gem names than get_latest_versions allows" do
+      WebMock.reset_executed_requests!
+      names = Array.new(RubygemsMcp::Client::MAX_GEM_NAMES + 1) { |index| "gem#{index}" }
+      expect {
+        client.get_latest_versions(names)
+      }.to raise_error(RubygemsMcp::ValidationError, /cannot exceed/)
+      expect(a_request(:get, /./)).not_to have_been_made
+    end
+
     it "handles empty search query" do
       expect {
         client.search_gems("")
@@ -1956,11 +2057,13 @@ RSpec.describe RubygemsMcp::Client do
 
   describe "get_ruby_version_github_changelog edge cases" do
     it "handles empty response body from GitHub" do
+      client.class.cache.clear
       stub_request(:get, "https://api.github.com/repos/ruby/ruby/releases/tags/v3_4_7")
         .to_return(status: 200, body: "", headers: {"Content-Type" => "application/json"})
 
-      result = client.get_ruby_version_github_changelog("3.4.7")
-      expect(result[:error]).to include("Empty response")
+      expect {
+        client.get_ruby_version_github_changelog("3.4.7")
+      }.to raise_error(RubygemsMcp::CorruptedDataError)
     end
 
     it "handles invalid JSON from GitHub" do
@@ -1968,12 +2071,20 @@ RSpec.describe RubygemsMcp::Client do
       stub_request(:get, "https://api.github.com/repos/ruby/ruby/releases/tags/v3_4_7")
         .to_return(status: 200, body: "invalid json", headers: {"Content-Type" => "application/json"})
 
-      # GitHub method wraps CorruptedDataError in APIError
       expect {
         client.get_ruby_version_github_changelog("3.4.7")
-      }.to raise_error(RubygemsMcp::APIError) do |error|
-        expect(error.message).to include("Failed to parse GitHub API response")
-      end
+      }.to raise_error(RubygemsMcp::CorruptedDataError)
+    end
+
+    it "rejects GitHub responses over the size limit" do
+      client.class.cache.clear
+      oversized = "x" * (RubygemsMcp::Client::MAX_RESPONSE_SIZE + 1)
+      stub_request(:get, "https://api.github.com/repos/ruby/ruby/releases/tags/v3_4_7")
+        .to_return(status: 200, body: oversized, headers: {"Content-Type" => "application/json"})
+
+      expect {
+        client.get_ruby_version_github_changelog("3.4.7")
+      }.to raise_error(RubygemsMcp::ResponseSizeExceededError)
     end
 
     it "handles non-404/200 HTTP responses from GitHub" do
@@ -1994,7 +2105,7 @@ RSpec.describe RubygemsMcp::Client do
       expect {
         client.get_ruby_version_github_changelog("3.4.7")
       }.to raise_error(RubygemsMcp::APIError) do |error|
-        expect(error.message).to include("Request to GitHub API failed")
+        expect(error.message).to include("failed")
       end
     end
   end
