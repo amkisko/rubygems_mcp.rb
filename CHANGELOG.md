@@ -2,19 +2,21 @@
 
 ## Unreleased
 
+## 0.1.5 (2026-09-08)
+
+- BREAKING: Require Ruby 3.4
+- BREAKING: Raise `fast-mcp` to `>= 1.6` and `nokogiri` to `~> 1.19`
+- BREAKING: `search_gems` paginates with `limit` and `offset` on the first search page
+- BREAKING: Raise when an MCP version tool receives an invalid sort order
 - Fetch gem changelogs only over HTTPS from GitHub, GitLab, RubyGems, and ruby-lang.org hosts
 - Include the changelog source host on fetch results
 - Read latest gem versions from gem info and keep rows whose dates fail to parse
-- Slice search results with limit and offset on the first search page
-- Raise when an MCP version tool receives an invalid sort order
 - Skip caching empty Ruby changelogs after a GitHub fetch failure
 - Stop reading HTTP bodies whose Content-Length exceeds 5MB
 - Cap the in-memory response cache
 - Paginate and cache the Ruby versions list on first fetch
 - Apply the HTTP size limit to GitHub Ruby changelogs
 - Limit latest-version lookups to 20 gem names
-- Document Ruby 3.4 and raised client errors
-- Refresh json, addressable, concurrent-ruby, and rack past published advisories
 
 ## 0.1.4 (2025-11-26)
 
@@ -76,4 +78,3 @@
 - Comprehensive test suite with RSpec, VCR cassettes, and WebMock
 - Requires Ruby 3.1 or higher
 - All dependencies use latest compatible versions with pessimistic versioning for security
-
