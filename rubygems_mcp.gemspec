@@ -43,7 +43,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rspec", "~> 3.13"
   spec.add_development_dependency "polyrun", ">= 2.2.0"
   spec.add_development_dependency "webmock", "~> 3.26"
-  spec.add_development_dependency "vcr", "~> 6.0"
+  spec.add_development_dependency "vcr", "~> 6.4"
   spec.add_development_dependency "rake", "~> 13.3"
   spec.add_development_dependency "simplecov", "~> 0.22"
   spec.add_development_dependency "rspec_junit_formatter", "~> 0.6"

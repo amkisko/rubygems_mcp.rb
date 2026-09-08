@@ -96,7 +96,14 @@ RSpec.describe RubygemsMcp::Server do
           resource = RubygemsMcp::Server::RubyVersionCompatibilityResource.new
           expect(resource.uri).to eq("rubygems://ruby/compatibility")
           expect(resource.class.resource_name).to eq("Ruby Version Compatibility")
-          expect(resource.content).to be_a(String)
+          payload = JSON.parse(resource.content)
+          notes = payload.fetch("compatibility_notes")
+          payload.fetch("maintenance_status").each do |row|
+            series = row["version"]
+            next if series.nil? || series.to_s.empty?
+
+            expect(notes).to have_key("#{series}.x")
+          end
         end
       end
     end
@@ -195,11 +202,11 @@ RSpec.describe RubygemsMcp::Server do
         tool = RubygemsMcp::Server::GetGemVersionsTool.new
         client = RubygemsMcp::Client.new
         allow(tool).to receive(:get_client).and_return(client)
-        allow(client).to receive(:get_gem_versions).and_return([])
+        expect(client).not_to receive(:get_gem_versions)
 
-        result = tool.call(gem_name: "rails", sort: "invalid_sort")
-        # Should default to :version_desc (line 196)
-        expect(result).to be_an(Array)
+        expect {
+          tool.call(gem_name: "rails", sort: "invalid_sort")
+        }.to raise_error(RubygemsMcp::ValidationError, /Invalid sort order/)
       end
 
       it "handles valid sort orders" do
@@ -221,11 +228,11 @@ RSpec.describe RubygemsMcp::Server do
         tool = RubygemsMcp::Server::GetRubyVersionsTool.new
         client = RubygemsMcp::Client.new
         allow(tool).to receive(:get_client).and_return(client)
-        allow(client).to receive(:get_ruby_versions).and_return([])
+        expect(client).not_to receive(:get_ruby_versions)
 
-        result = tool.call(sort: "invalid_sort")
-        # Should default to :version_desc (line 233)
-        expect(result).to be_an(Array)
+        expect {
+          tool.call(sort: "invalid_sort")
+        }.to raise_error(RubygemsMcp::ValidationError, /Invalid sort order/)
       end
 
       it "handles valid sort orders" do

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Fetch gem changelogs only over HTTPS from GitHub, GitLab, RubyGems, and ruby-lang.org hosts
+- Include the changelog source host on fetch results
+- Read latest gem versions from gem info and keep rows whose dates fail to parse
+- Slice search results with limit and offset on the first search page
+- Raise when an MCP version tool receives an invalid sort order
+- Skip caching empty Ruby changelogs after a GitHub fetch failure
+- Stop reading HTTP bodies whose Content-Length exceeds 5MB
+- Cap the in-memory response cache
 - Paginate and cache the Ruby versions list on first fetch
 - Apply the HTTP size limit to GitHub Ruby changelogs
 - Limit latest-version lookups to 20 gem names
