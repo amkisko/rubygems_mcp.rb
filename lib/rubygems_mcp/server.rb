@@ -124,6 +124,15 @@ module RubygemsMcp
       def get_client
         Client.new
       end
+
+      def parse_sort_order(sort)
+        sort_value = sort.to_s
+        unless %w[version_desc version_asc date_desc date_asc].include?(sort_value)
+          raise ValidationError, "Invalid sort order. Must be one of: version_desc, version_asc, date_desc, date_asc"
+        end
+
+        sort_value.to_sym
+      end
     end
 
     # Get latest versions for a list of gems with release dates
@@ -155,14 +164,7 @@ module RubygemsMcp
       end
 
       def call(gem_name:, limit: nil, offset: 0, sort: "version_desc", fields: nil)
-        valid_sorts = %w[version_desc version_asc date_desc date_asc]
-        sort_value = sort.to_s
-        sort_sym = if valid_sorts.include?(sort_value)
-          sort_value.to_sym
-        else
-          :version_desc
-        end
-        get_client.get_gem_versions(gem_name, limit: limit, offset: offset, sort: sort_sym, fields: fields)
+        get_client.get_gem_versions(gem_name, limit: limit, offset: offset, sort: parse_sort_order(sort), fields: fields)
       end
     end
 
@@ -192,14 +194,7 @@ module RubygemsMcp
       end
 
       def call(limit: nil, offset: 0, sort: "version_desc")
-        valid_sorts = %w[version_desc version_asc date_desc date_asc]
-        sort_value = sort.to_s
-        sort_sym = if valid_sorts.include?(sort_value)
-          sort_value.to_sym
-        else
-          :version_desc
-        end
-        get_client.get_ruby_versions(limit: limit, offset: offset, sort: sort_sym)
+        get_client.get_ruby_versions(limit: limit, offset: offset, sort: parse_sort_order(sort))
       end
     end
 
@@ -350,13 +345,12 @@ module RubygemsMcp
 
       arguments do
         required(:query).filled(:string).description("Search query (e.g., 'rails')")
-        optional(:page).filled(:integer).description("Page number (1-based). If provided, overrides offset")
-        optional(:limit).filled(:integer).description("Maximum number of results to return")
-        optional(:offset).filled(:integer).description("Number of results to skip (for pagination)")
+        optional(:limit).filled(:integer).description("Maximum number of results from the first search.json response")
+        optional(:offset).filled(:integer).description("Number of results to skip within the first search.json response")
       end
 
-      def call(query:, page: nil, limit: nil, offset: 0)
-        get_client.search_gems(query, page: page, limit: limit, offset: offset)
+      def call(query:, limit: nil, offset: 0)
+        get_client.search_gems(query, limit: limit, offset: offset)
       end
     end
 
@@ -490,26 +484,40 @@ module RubygemsMcp
         latest = client.get_latest_ruby_version
         maintenance_status = client.get_ruby_maintenance_status
 
-        # Create a map of version to maintenance status for quick lookup
-        maintenance_status.each_with_object({}) do |status, map|
-          map[status[:version]] = status
-        end
-
         data = {
           latest: latest,
           recent_versions: ruby_versions,
-          maintenance_status: maintenance_status.first(10), # Most recent 10 versions
-          compatibility_notes: {
-            "3.4.x" => "Latest stable series. Normal maintenance. Supports all modern gems.",
-            "3.3.x" => "Stable series. Normal maintenance until 2027. Well-supported by most gems.",
-            "3.2.x" => "Security maintenance only. EOL expected 2026-03-31.",
-            "3.1.x" => "End of life (EOL: 2025-03-26). No longer supported.",
-            "3.0.x" => "End of life (EOL: 2024-04-23). No longer supported.",
-            "2.7.x" => "End of life. No longer supported."
-          }
+          maintenance_status: maintenance_status.first(10),
+          compatibility_notes: compatibility_notes_from(maintenance_status)
         }
 
         JSON.pretty_generate(data)
+      end
+
+      private
+
+      def compatibility_notes_from(maintenance_status)
+        maintenance_status.each_with_object({}) do |status, notes|
+          series = status[:version]
+          next if series.nil? || series.empty?
+
+          notes["#{series}.x"] = maintenance_note(status)
+        end
+      end
+
+      def maintenance_note(status)
+        case status[:status]
+        when "normal maintenance"
+          "Normal maintenance until #{status[:normal_maintenance_until]}."
+        when "security maintenance"
+          "Security maintenance only. EOL expected #{status[:eol]}."
+        when "eol"
+          "End of life (EOL: #{status[:eol]}). No longer supported."
+        when "preview"
+          "Preview release."
+        else
+          status[:status].to_s
+        end
       end
     end
 

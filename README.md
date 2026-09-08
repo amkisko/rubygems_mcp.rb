@@ -103,7 +103,7 @@ The server will start and communicate via STDIN/STDOUT using the MCP protocol.
 
 - **RubyGems API Client**: Full-featured client for RubyGems REST API with comprehensive endpoint coverage
 - **Ruby Version Information**: Fetch Ruby release information, changelogs, and maintenance status from ruby-lang.org
-- **MCP Server Integration**: Ready-to-use MCP server with 19 tools and 4 resources, compatible with Cursor IDE, Claude Desktop, and other MCP-enabled tools
+- **MCP Server Integration**: Ready-to-use MCP server with 18 tools and 4 resources, compatible with Cursor IDE, Claude Desktop, and other MCP-enabled tools
 - **Pagination & Sorting**: Support for large result sets with customizable pagination and sorting options
 - **Caching**: In-memory caching with configurable TTL for improved performance
 - **Error Handling**: Graceful error handling with custom exceptions and response size limits
@@ -286,7 +286,7 @@ The MCP server provides the following tools:
    - Parameters: `gem_name` (string), `version` (optional string, uses latest if not provided)
 
 13. **search_gems** - Search for gems by name on RubyGems
-   - Parameters: `query` (string)
+   - Parameters: `query` (string), `limit` (optional integer), `offset` (optional integer)
 
 14. **get_ruby_roadmap** - Get Ruby roadmap information from bugs.ruby-lang.org showing planned versions and their issues
    - Parameters: none

@@ -24,13 +24,12 @@ RSpec.describe RubygemsMcp::Client do
       stub_request(:get, "https://rubygems.org/api/v1/versions/test_gem.json")
         .to_return(
           status: 200,
-          body: '[{"number":"1.0.0","created_at":"2020-01-01"},{"number":"invalid-version","created_at":"2020-01-02"}]',
+          body: '[{"number":"1.0.0","created_at":"2020-01-01"},{"number":"1.0.0.pre","created_at":"2020-01-02","prerelease":true},{"number":"invalid-version","created_at":"2020-01-03"}]',
           headers: {"Content-Type" => "application/json"}
         )
 
       versions = client.get_gem_versions("test_gem")
-      # Should only include valid semantic versions
-      expect(versions.all? { |v| v[:version].match?(/^\d+\.\d+\.\d+$/) }).to be true
+      expect(versions.map { |row| row[:version] }).to contain_exactly("1.0.0", "1.0.0.pre")
     end
 
     it "handles empty versions array" do
@@ -53,7 +52,6 @@ RSpec.describe RubygemsMcp::Client do
         )
 
       versions = client.get_gem_versions("test_gem_invalid")
-      # Should filter out all invalid versions (only matches /^\d+\.\d+\.\d+$/)
       expect(versions).to eq([])
     end
 
@@ -65,22 +63,29 @@ RSpec.describe RubygemsMcp::Client do
   end
 
   describe "#get_latest_versions" do
-    it "fetches latest versions for multiple gems", :vcr do
-      VCR.use_cassette("get_latest_versions_multiple") do
-        # Use smaller gems to avoid size limit issues
-        versions = client.get_latest_versions(["rake", "json"])
-        expect(versions).to be_an(Array)
-        expect(versions.length).to eq(2)
-        expect(versions.first[:name]).to be_a(String)
-        expect(versions.first[:version]).to be_a(String)
-        expect(versions.last[:name]).to be_a(String)
-        expect(versions.last[:version]).to be_a(String)
-      end
+    it "fetches latest versions for multiple gems" do
+      client.class.cache.clear
+      stub_request(:get, "https://rubygems.org/api/v1/gems/rake.json")
+        .to_return(
+          status: 200,
+          body: {name: "rake", version: "13.0.0", licenses: ["MIT"], version_created_at: "2020-01-01"}.to_json,
+          headers: {"Content-Type" => "application/json"}
+        )
+      stub_request(:get, "https://rubygems.org/api/v1/gems/json.json")
+        .to_return(
+          status: 200,
+          body: {name: "json", version: "2.0.0", licenses: ["Ruby"], version_created_at: "2020-02-01"}.to_json,
+          headers: {"Content-Type" => "application/json"}
+        )
+
+      versions = client.get_latest_versions(["rake", "json"])
+      expect(versions.map { |row| [row[:name], row[:version]] }).to eq([["rake", "13.0.0"], ["json", "2.0.0"]])
     end
 
     it "handles gems with no versions" do
-      stub_request(:get, "https://rubygems.org/api/v1/versions/nonexistent_gem_xyz.json")
-        .to_return(status: 200, body: "[]", headers: {"Content-Type" => "application/json"})
+      client.class.cache.clear
+      stub_request(:get, "https://rubygems.org/api/v1/gems/nonexistent_gem_xyz.json")
+        .to_return(status: 404, body: '{"error":"Not Found"}', headers: {"Content-Type" => "application/json"})
 
       versions = client.get_latest_versions(["nonexistent_gem_xyz"])
       expect(versions.length).to eq(1)
@@ -89,10 +94,11 @@ RSpec.describe RubygemsMcp::Client do
     end
 
     it "handles field selection" do
-      stub_request(:get, "https://rubygems.org/api/v1/versions/test_gem.json")
+      client.class.cache.clear
+      stub_request(:get, "https://rubygems.org/api/v1/gems/test_gem.json")
         .to_return(
           status: 200,
-          body: '[{"number":"1.0.0","created_at":"2020-01-01","licenses":["MIT"]}]',
+          body: {name: "test_gem", version: "1.0.0", licenses: ["MIT"], version_created_at: "2020-01-01"}.to_json,
           headers: {"Content-Type" => "application/json"}
         )
 
@@ -139,21 +145,18 @@ RSpec.describe RubygemsMcp::Client do
       end
     end
 
-    it "supports page parameter", :vcr do
-      VCR.use_cassette("search_gems_rails_page") do
-        results_page1 = client.search_gems("rails", page: 1, limit: 30)
-        expect(results_page1).to be_an(Array)
-      end
-      VCR.use_cassette("search_gems_rails_page2") do
-        results_page2 = client.search_gems("rails", page: 2, limit: 30)
-        expect(results_page2).to be_an(Array)
-      end
-    end
+    it "raises when offset is past the returned results" do
+      client.class.cache.clear
+      stub_request(:get, "https://rubygems.org/api/v1/search.json?query=rails")
+        .to_return(
+          status: 200,
+          body: [{name: "rails", version: "7.1.0"}].to_json,
+          headers: {"Content-Type" => "application/json"}
+        )
 
-    it "validates page parameter" do
       expect {
-        client.search_gems("rails", page: 0)
-      }.to raise_error(RubygemsMcp::ValidationError, /Page must be positive/)
+        client.search_gems("rails", offset: 5)
+      }.to raise_error(RubygemsMcp::ValidationError, /Offset is past the returned results/)
     end
 
     it "validates empty query" do
@@ -310,19 +313,10 @@ RSpec.describe RubygemsMcp::Client do
         version = versions.first
         expect(version[:version]).to be_a(String)
         expect(version[:built_at]).to be_a(String).or be_nil
-        expect([true, false, nil]).to include(version[:prerelease])
+        expect(version[:prerelease]).to be(true).or be(false)
         expect(version[:platform]).to be_a(String)
         expect(version[:downloads_count]).to be_a(Integer).or be_nil
         expect(version[:sha]).to be_a(String).or be_nil
-      end
-    end
-  end
-
-  describe "#get_latest_versions" do
-    it "supports field selection", :vcr do
-      VCR.use_cassette("get_latest_versions_field_selection") do
-        versions = client.get_latest_versions(["rails"], fields: ["name", "version"])
-        expect(versions.first.keys).to contain_exactly(:name, :version)
       end
     end
   end
@@ -611,13 +605,26 @@ RSpec.describe RubygemsMcp::Client do
       }.to raise_error(RubygemsMcp::ValidationError, /URL destination is not allowed/)
     end
 
+    it "rejects a changelog host that is not on the allowlist before DNS" do
+      expect(Addrinfo).not_to receive(:getaddrinfo)
+      allow(client).to receive(:get_gem_info).and_return(
+        name: "offsite_changelog",
+        version: "1.0.0",
+        changelog_uri: "https://example.com/changelog"
+      )
+
+      expect {
+        client.get_gem_changelog("offsite_changelog")
+      }.to raise_error(RubygemsMcp::ValidationError, /URL destination is not allowed/)
+    end
+
     it "uses cached changelog when available" do
       # Set up cache with a changelog entry
       cache_key = "gem_changelog:test_gem:1.0.0"
       cached_changelog = {
         gem_name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog",
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md",
         summary: "Cached changelog content"
       }
       client.class.cache.set(cache_key, cached_changelog, 3600)
@@ -625,7 +632,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       result = client.get_gem_changelog("test_gem")
@@ -675,6 +682,7 @@ RSpec.describe RubygemsMcp::Client do
       expect(changelog[:gem_name]).to eq("rails")
       expect(changelog[:version]).to eq("7.1.0")
       expect(changelog[:changelog_uri]).to eq("https://github.com/rails/rails/releases/tag/v7.1.0")
+      expect(changelog[:source_host]).to eq("github.com")
       expect(changelog[:summary]).to be_a(String)
       expect(changelog[:summary].length).to be > 50 # Should have meaningful content
       expect(changelog[:summary]).to include("release") # Check for meaningful content
@@ -695,11 +703,11 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog_empty"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG_EMPTY.md"
       })
 
       # Return HTML that's too short (fails validation - less than 50 chars)
-      stub_request(:get, "https://example.com/changelog_empty")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG_EMPTY.md")
         .to_return(
           status: 200,
           body: "<html><body></body></html>",
@@ -716,7 +724,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "2.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       html_body = <<~HTML
@@ -732,7 +740,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem", version: "2.0.0")
@@ -778,11 +786,11 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog_empty"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG_EMPTY.md"
       })
 
       # Return HTML that's too short (fails validation - less than 50 chars)
-      stub_request(:get, "https://example.com/changelog_empty")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG_EMPTY.md")
         .to_return(
           status: 200,
           body: "<html><body></body></html>",
@@ -799,7 +807,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "2.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       html_body = <<~HTML
@@ -815,7 +823,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem", version: "2.0.0")
@@ -863,7 +871,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       html_body = <<~HTML
@@ -880,7 +888,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem")
@@ -893,7 +901,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       long_content = "This is a very long changelog entry. " * 500 # ~20,000 characters
@@ -909,7 +917,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem")
@@ -927,7 +935,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       # Create content that's exactly over 10000 chars with paragraph breaks
@@ -945,7 +953,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem")
@@ -963,7 +971,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       # Create content over 10000 chars with no double newlines in first 10000 chars
@@ -979,7 +987,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem")
@@ -994,7 +1002,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       # Create content that's over 10000 chars without paragraph breaks
@@ -1011,7 +1019,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem")
@@ -1027,7 +1035,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       html_body = <<~HTML
@@ -1044,7 +1052,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem")
@@ -1058,7 +1066,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       html_body = <<~HTML
@@ -1075,7 +1083,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem")
@@ -1087,7 +1095,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       html_body = <<~HTML
@@ -1103,7 +1111,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem")
@@ -1116,7 +1124,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       html_body = <<~HTML
@@ -1132,7 +1140,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem")
@@ -1146,7 +1154,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       html_body = <<~HTML
@@ -1162,7 +1170,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem")
@@ -1175,7 +1183,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       html = <<~HTML
@@ -1191,7 +1199,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem")
@@ -1205,7 +1213,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       html = <<~HTML
@@ -1219,7 +1227,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem")
@@ -1232,7 +1240,7 @@ RSpec.describe RubygemsMcp::Client do
       allow(client).to receive(:get_gem_info).and_return({
         name: "test_gem",
         version: "1.0.0",
-        changelog_uri: "https://example.com/changelog"
+        changelog_uri: "https://github.com/user/test_gem/blob/main/CHANGELOG.md"
       })
 
       html = <<~HTML
@@ -1246,7 +1254,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com/changelog")
+      stub_request(:get, "https://github.com/user/test_gem/blob/main/CHANGELOG.md")
         .to_return(status: 200, body: html, headers: {"Content-Type" => "text/html"})
 
       result = client.get_gem_changelog("test_gem")
@@ -1379,6 +1387,27 @@ RSpec.describe RubygemsMcp::Client do
       end
     end
 
+    it "rejects a Content-Length header over the size cap without reading the body" do
+      VCR.turned_off do
+        client.class.cache.clear
+        over_cap = RubygemsMcp::Client::MAX_RESPONSE_SIZE + 1
+        stub_request(:get, "https://rubygems.org/api/v1/versions/test_content_length_cap_xyz.json")
+          .to_return(
+            status: 200,
+            body: "tiny",
+            headers: {"Content-Length" => over_cap.to_s}
+          )
+
+        uri = URI("https://rubygems.org/api/v1/versions/test_content_length_cap_xyz.json")
+        expect {
+          client.send(:make_request, uri)
+        }.to raise_error(RubygemsMcp::ResponseSizeExceededError) do |error|
+          expect(error.size).to eq(over_cap)
+          expect(error.max_size).to eq(RubygemsMcp::Client::MAX_RESPONSE_SIZE)
+        end
+      end
+    end
+
     it "accepts responses smaller than 5MB", :vcr do
       VCR.use_cassette("response_size_under_limit") do
         versions = client.get_gem_versions("rails")
@@ -1412,7 +1441,7 @@ RSpec.describe RubygemsMcp::Client do
       stub_request(:get, "https://rubygems.org/api/v1/gems/rails.json")
         .to_return(
           status: 200,
-          body: "<!DOCTYPE html><html><body>Cloudflare DDoS protection page</body></html>"
+          body: "<!DOCTYPE html><html><head><title>Cloudflare</title></head><body>Cloudflare DDoS protection page</body></html>"
         )
 
       expect {
@@ -1457,7 +1486,8 @@ RSpec.describe RubygemsMcp::Client do
       end
     end
 
-    it "detects error pages in HTML" do
+    it "parses generic HTML error titles as an empty version list" do
+      client.class.cache.clear
       html = <<~HTML
         <html>
           <head><title>Error Page</title></head>
@@ -1474,11 +1504,7 @@ RSpec.describe RubygemsMcp::Client do
         .with(headers: {"Accept" => "text/html"})
         .to_return(status: 200, body: html)
 
-      expect {
-        client.get_ruby_versions(limit: 1)
-      }.to raise_error(RubygemsMcp::CorruptedDataError) do |error|
-        expect(error.message).to include("error page")
-      end
+      expect(client.get_ruby_versions(limit: 1)).to eq([])
     end
   end
 
@@ -1632,6 +1658,10 @@ RSpec.describe RubygemsMcp::Client do
 
       it "raises error for negative limit" do
         expect { client.send(:validate_pagination_params, limit: -1, offset: 0) }.to raise_error(RubygemsMcp::ValidationError, /must be positive/)
+      end
+
+      it "raises error for limit zero" do
+        expect { client.send(:validate_pagination_params, limit: 0, offset: 0) }.to raise_error(RubygemsMcp::ValidationError, /must be positive/)
       end
 
       it "raises error for negative offset" do
@@ -1813,11 +1843,13 @@ RSpec.describe RubygemsMcp::Client do
   end
 
   describe "HTML validation edge cases" do
+    before { client.class.cache.clear }
+
     it "detects crawler protection pages" do
       stub_request(:get, "https://www.ruby-lang.org/en/downloads/releases/")
         .to_return(
           status: 200,
-          body: "<html><body><h1>Cloudflare Protection</h1><p>Please wait while we verify you are human.</p></body></html>",
+          body: "<html><head><title>Cloudflare</title></head><body><h1>Cloudflare Protection</h1><p>Please wait while we verify you are human.</p></body></html>",
           headers: {"Content-Type" => "text/html"}
         )
 
@@ -1843,7 +1875,7 @@ RSpec.describe RubygemsMcp::Client do
       end
     end
 
-    it "detects error pages in HTML" do
+    it "parses a 200 Page Not Found HTML page as an empty version list" do
       stub_request(:get, "https://www.ruby-lang.org/en/downloads/releases/")
         .to_return(
           status: 200,
@@ -1851,54 +1883,7 @@ RSpec.describe RubygemsMcp::Client do
           headers: {"Content-Type" => "text/html"}
         )
 
-      expect {
-        client.get_ruby_versions
-      }.to raise_error(RubygemsMcp::CorruptedDataError) do |error|
-        expect(error.message).to include("error page")
-      end
-    end
-
-    it "handles Nokogiri XML syntax errors" do
-      # Nokogiri is very forgiving with HTML, so triggering SyntaxError is extremely difficult
-      # We'll test the rescue block by directly raising the error in the method
-      html_body = "<html><body><p>This is enough content to pass validation checks.</p><p>More content here.</p></body></html>"
-      uri = URI("https://www.ruby-lang.org/en/downloads/releases/")
-
-      # Since Nokogiri::HTML(body) is hard to stub, we'll test the rescue block directly
-      # by stubbing the Nokogiri call to raise an error
-      syntax_error = Nokogiri::XML::SyntaxError.new("Parse error")
-
-      # Stub Nokogiri::HTML to raise the error - try different approaches
-      allow_any_instance_of(Nokogiri::HTML4::Document).to receive(:text).and_raise(syntax_error)
-      # Also stub the class method
-      allow(Nokogiri::HTML).to receive(:parse).and_raise(syntax_error)
-      # And stub the [] method if it exists
-      if Nokogiri::HTML.respond_to?(:[])
-        allow(Nokogiri::HTML).to receive(:[]).and_raise(syntax_error)
-      end
-
-      # If stubbing doesn't work, we can at least verify the rescue block exists
-      # by checking the method definition
-      method_source = begin
-        client.method(:validate_and_parse_html).source
-      rescue
-        nil
-      end
-      if method_source
-        expect(method_source).to include("rescue Nokogiri::XML::SyntaxError")
-      end
-
-      # Try to actually trigger it - this may not work but documents the intent
-      begin
-        client.send(:validate_and_parse_html, html_body, uri)
-      rescue RubygemsMcp::CorruptedDataError => e
-        expect(e.message).to include("Failed to parse HTML")
-        expect(e.original_error).to be_a(Nokogiri::XML::SyntaxError)
-      rescue
-        # If we can't trigger it, that's okay - the rescue block exists in the code
-        # This test documents that the error handling path exists
-        expect(client.method(:validate_and_parse_html).source).to include("rescue Nokogiri::XML::SyntaxError")
-      end
+      expect(client.get_ruby_versions).to eq([])
     end
   end
 
@@ -2025,7 +2010,7 @@ RSpec.describe RubygemsMcp::Client do
   describe "get_ruby_version_changelog edge cases" do
     it "handles version not found in versions list" do
       allow(client).to receive(:get_ruby_versions).and_return([
-        {version: "3.4.6", release_notes_url: "https://example.com"}
+        {version: "3.4.6", release_notes_url: "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/"}
       ])
 
       result = client.get_ruby_version_changelog("999.999.999")
@@ -2097,6 +2082,18 @@ RSpec.describe RubygemsMcp::Client do
       }.to raise_error(RubygemsMcp::ServerError)
     end
 
+    it "returns and caches a GitHub 403 miss" do
+      client.class.cache.clear
+      stub_request(:get, "https://api.github.com/repos/ruby/ruby/releases/tags/v3_4_7")
+        .to_return(status: 403, body: '{"message":"Forbidden"}', headers: {"Content-Type" => "application/json"})
+
+      first = client.get_ruby_version_github_changelog("3.4.7")
+      expect(first[:error]).to include("denied access")
+      second = client.get_ruby_version_github_changelog("3.4.7")
+      expect(second).to eq(first)
+      expect(a_request(:get, "https://api.github.com/repos/ruby/ruby/releases/tags/v3_4_7")).to have_been_made.once
+    end
+
     it "handles generic errors from GitHub API" do
       client.class.cache.clear
       stub_request(:get, "https://api.github.com/repos/ruby/ruby/releases/tags/v3_4_7")
@@ -2111,6 +2108,12 @@ RSpec.describe RubygemsMcp::Client do
   end
 
   describe "get_ruby_version_changelog GitHub fallback" do
+    before do
+      allow(Addrinfo).to receive(:getaddrinfo).and_return(
+        [instance_double(Addrinfo, ip_address: "93.184.216.34")]
+      )
+    end
+
     it "uses GitHub when release notes return empty content" do
       # Mock version with release notes URL that returns empty content
       allow(client).to receive(:get_ruby_versions).and_return([
@@ -2137,6 +2140,25 @@ RSpec.describe RubygemsMcp::Client do
       # Should fall back to GitHub when content is empty
       expect(changelog[:github_changelog]).to eq("Release notes from GitHub")
       expect(changelog[:content]).to eq("Release notes from GitHub")
+    end
+
+    it "does not cache an empty ruby changelog after a GitHub fetch failure" do
+      client.class.cache.clear
+      allow(client).to receive(:get_ruby_versions).and_return([
+        {version: "3.4.7", release_notes_url: "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/"}
+      ])
+      stub_request(:get, "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/")
+        .to_return(
+          status: 200,
+          body: "<html><head><title>Test</title></head><body><div id='content'></div><p>This is enough text to pass validation but content div is empty</p></body></html>",
+          headers: {"Content-Type" => "text/html"}
+        )
+      stub_request(:get, "https://api.github.com/repos/ruby/ruby/releases/tags/v3_4_7")
+        .to_return(status: 500, body: '{"error":"Internal Server Error"}', headers: {"Content-Type" => "application/json"})
+
+      result = client.get_ruby_version_changelog("3.4.7")
+      expect(result[:content]).to be_nil.or eq("")
+      expect(client.class.cache.get("ruby_changelog:3.4.7")).to be_nil
     end
   end
 
@@ -2243,17 +2265,24 @@ RSpec.describe RubygemsMcp::Client do
           headers: {"Content-Type" => "application/json"}
         )
 
-      # Date.parse will raise Date::Error - the code doesn't rescue it, so it will propagate
-      expect {
-        client.get_gem_versions("test_gem_dates")
-      }.to raise_error(Date::Error)
+      versions = client.get_gem_versions("test_gem_dates")
+      expect(versions.length).to eq(1)
+      expect(versions.first[:version]).to eq("1.0.0")
+      expect(versions.first[:release_date]).to be_nil
+      expect(versions.first[:built_at]).to be_nil
     end
   end
 
   describe "version normalization edge cases" do
+    before do
+      allow(Addrinfo).to receive(:getaddrinfo).and_return(
+        [instance_double(Addrinfo, ip_address: "93.184.216.34")]
+      )
+    end
+
     it "handles preview version formats in get_ruby_version_changelog" do
       allow(client).to receive(:get_ruby_versions).and_return([
-        {version: "4.0.0.pre.preview2", release_notes_url: "https://example.com"}
+        {version: "4.0.0.pre.preview2", release_notes_url: "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/"}
       ])
 
       html_body = <<~HTML
@@ -2269,7 +2298,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com")
+      stub_request(:get, "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       result = client.get_ruby_version_changelog("4.0.0.pre.preview2")
@@ -2278,7 +2307,7 @@ RSpec.describe RubygemsMcp::Client do
 
     it "handles version matching with normalized formats" do
       allow(client).to receive(:get_ruby_versions).and_return([
-        {version: "4.0.0", release_notes_url: "https://example.com"}
+        {version: "4.0.0", release_notes_url: "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/"}
       ])
 
       html_body = <<~HTML
@@ -2294,7 +2323,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com")
+      stub_request(:get, "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       # Should match "4.0.0-preview2" to "4.0.0" via normalization
@@ -2304,7 +2333,7 @@ RSpec.describe RubygemsMcp::Client do
 
     it "handles ArgumentError in version normalization when input version is invalid" do
       allow(client).to receive(:get_ruby_versions).and_return([
-        {version: "3.4.7", release_notes_url: "https://example.com"}
+        {version: "3.4.7", release_notes_url: "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/"}
       ])
 
       html_body = <<~HTML
@@ -2319,7 +2348,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com")
+      stub_request(:get, "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       # Invalid version format should raise ValidationError before normalization
@@ -2331,7 +2360,7 @@ RSpec.describe RubygemsMcp::Client do
     it "handles ArgumentError when comparing versions in get_ruby_version_changelog" do
       # Create a version list with an invalid version that will cause ArgumentError during comparison
       allow(client).to receive(:get_ruby_versions).and_return([
-        {version: "invalid-version-in-list", release_notes_url: "https://example.com"}
+        {version: "invalid-version-in-list", release_notes_url: "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/"}
       ])
 
       # Should handle ArgumentError gracefully (line 361, 371) and return version not found
@@ -2341,7 +2370,7 @@ RSpec.describe RubygemsMcp::Client do
 
     it "handles ArgumentError in version normalization for invalid input" do
       allow(client).to receive(:get_ruby_versions).and_return([
-        {version: "3.4.7", release_notes_url: "https://example.com"}
+        {version: "3.4.7", release_notes_url: "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/"}
       ])
 
       html_body = <<~HTML
@@ -2356,7 +2385,7 @@ RSpec.describe RubygemsMcp::Client do
         </html>
       HTML
 
-      stub_request(:get, "https://example.com")
+      stub_request(:get, "https://www.ruby-lang.org/en/news/2024/10/07/ruby-3-4-7-released/")
         .to_return(status: 200, body: html_body, headers: {"Content-Type" => "text/html"})
 
       # Use an invalid version format that will cause ArgumentError in normalization (line 361)
@@ -2869,15 +2898,15 @@ RSpec.describe RubygemsMcp::Client do
     end
 
     describe "#search_gems" do
-      it "handles page parameter conversion" do
+      it "slices the first search page with offset and limit" do
         stub_request(:get, "https://rubygems.org/api/v1/search.json?query=test")
           .to_return(status: 200, body: (1..60).map { |i| {name: "test_gem_#{i}", version: "1.0.0"} }.to_json, headers: {"Content-Type" => "application/json"})
 
-        results_page1 = client.search_gems("test", page: 1, limit: 30)
-        results_page2 = client.search_gems("test", page: 2, limit: 30)
-        expect(results_page1.length).to eq(30)
-        expect(results_page2.length).to eq(30)
-        expect(results_page1.first[:name]).not_to eq(results_page2.first[:name])
+        first = client.search_gems("test", limit: 30, offset: 0)
+        second = client.search_gems("test", limit: 30, offset: 30)
+        expect(first.length).to eq(30)
+        expect(second.length).to eq(30)
+        expect(first.first[:name]).not_to eq(second.first[:name])
       end
     end
   end

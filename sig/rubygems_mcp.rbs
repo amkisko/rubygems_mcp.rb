@@ -34,18 +34,29 @@ module RubygemsMcp
   # Input validation errors
   class ValidationError < Error; end
 
+  class Cache
+    MAX_ENTRIES: Integer
+    def initialize: (?max_entries: Integer) -> void
+    def get: (String key) -> untyped?
+    def set: (String key, untyped value, Integer ttl_seconds) -> void
+    def fetch: (String key, Integer ttl_seconds) { () -> untyped } -> untyped
+    def clear: () -> void
+    def size: () -> Integer
+  end
+
+  class NetworkPolicy
+    ALLOWED_SCHEMES: Array[String]
+    ALLOWED_HOST_SUFFIXES: Array[String]
+    def self.validate!: (String | URI url, ?host_suffixes: Array[String]) -> [URI, String]
+    def self.allowed_host?: (String? host, ?Array[String] suffixes) -> bool
+  end
+
   class Client
     MAX_RESPONSE_SIZE: Integer
     VALID_SORT_ORDERS: Array[Symbol]
     MAX_LIMIT: Integer
     MAX_GEM_NAMES: Integer
-
-    class Cache
-      def initialize: () -> void
-      def get: (String key) -> untyped?
-      def set: (String key, untyped value, Integer ttl_seconds) -> void
-      def clear: () -> void
-    end
+    GITHUB_MISS_TTL: Integer
 
     def self.cache: () -> Cache
 
@@ -203,7 +214,7 @@ module RubygemsMcp
     end
 
     class SearchGemsTool < BaseTool
-      def call: (String query) -> Array[Hash[Symbol, untyped]]
+      def call: (String query, ?Integer? limit, ?Integer offset) -> Array[Hash[Symbol, untyped]]
     end
 
     class GetRubyRoadmapTool < BaseTool
