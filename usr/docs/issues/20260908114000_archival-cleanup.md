@@ -2,7 +2,7 @@
 
 ## Decisions
 
-Close remaining GitHub issues, leftover pull request branches, and local patch branches before the 0.2.0 cut. Keep FastMcp STDIN proof and changelog redirect following unshipped. Do not follow changelog redirects.
+Close remaining GitHub issues, leftover pull request branches, and local patch branches before the 0.2.0 cut. Keep FastMcp STDIN proof and changelog redirect following unshipped. Do not follow changelog redirects. Archive GitHub after RubyGems lists 0.2.0 and tag 0.2.0 exists. Leave GitLab and Codeberg writable.
 
 ## Effects
 
@@ -10,9 +10,11 @@ GitHub issue 3 is closed. search_gems was already on the gem. GitHub has no open
 
 Quality checks on 2026-09-08: bundle exec rubocop inspected 24 files, no offenses. bundle exec rbs validate succeeded. POLYRUN_COVERAGE=1 bundle exec polyrun parallel-rspec --workers 5 --merge-failures exited 0.
 
+gem search rubygems_mcp --remote --exact listed rubygems_mcp (0.2.0). Tag 0.2.0 points at e401a5e. GitHub release 0.2.0 is published. This note is the last GitHub write before archive.
+
 ## Next
 
-Publish 0.2.0: gem build, gem push, git tag 0.2.0, git push --tags, gh release create. Archive the GitHub repository after those exist.
+FastMcp STDIN proof and changelog redirect following stay unshipped. GitLab and Codeberg stay writable.
 
 ## Source
 
