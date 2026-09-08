@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.1.5 (2026-09-08)
+## 0.2.0 (2026-09-08)
 
 - BREAKING: Require Ruby 3.4
 - BREAKING: Raise `fast-mcp` to `>= 1.6` and `nokogiri` to `~> 1.19`
