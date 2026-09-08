@@ -6,11 +6,13 @@ Close remaining GitHub issues, leftover pull request branches, and local patch b
 
 ## Effects
 
-GitHub issue 3 is closed. search_gems was already on the gem. GitHub has no open pull requests. GitHub heads are only main. Local dependabot and patch branches are deleted. The leftover dependabot worktree is removed.
+GitHub issue 3 is closed. search_gems was already on the gem. GitHub has no open pull requests. GitHub, GitLab, and Codeberg heads are only main. Local dependabot and patch branches are deleted. The leftover dependabot worktree is removed. GitLab and Codeberg dependabot heads are deleted. GitLab and Codeberg main match GitHub.
+
+Quality checks on 2026-09-08: bundle exec rubocop inspected 24 files, no offenses. bundle exec rbs validate succeeded. POLYRUN_COVERAGE=1 bundle exec polyrun parallel-rspec --workers 5 --merge-failures exited 0.
 
 ## Next
 
-Publish 0.2.0 with make release. Push main to GitLab and Codeberg if those remotes lag GitHub. Delete leftover dependabot heads on GitLab and Codeberg. Archive the GitHub repository after the gem, tag, and GitHub release exist.
+Publish 0.2.0: gem build, gem push, git tag 0.2.0, git push --tags, gh release create. Archive the GitHub repository after those exist.
 
 ## Source
 
